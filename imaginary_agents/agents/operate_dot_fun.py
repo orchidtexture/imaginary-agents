@@ -11,13 +11,11 @@ from atomic_agents.agents.base_agent import (
 from atomic_agents.lib.components.system_prompt_generator import (
     SystemPromptGenerator
 )
-from atomic_agents.lib.components.agent_memory import AgentMemory
-from context_providers import TrendingMemesProvider, PreviousPostProvider
+from imaginary_agents.context_providers import (
+    TrendingMemesProvider, PreviousPostProvider
+)
 
 load_dotenv()
-
-# Memory setup
-memory = AgentMemory()
 
 # API Key setup
 API_KEY = ""
@@ -34,8 +32,6 @@ if not API_KEY:
 class OperateDotFunAgentInputSchema(BaseIOSchema):
     """This schema defines the input schema for the OperateDotFunAgent."""
 
-    # question: str = Field(..., description="A post by an author that may have been contradicted by themselves in the past based on the provided context.")
-    # previous_tweets: list = Field(..., description="The 3 last tweets posted by the agent.")
     meme_lore: str = Field(
         ..., description="Lore for the current memecoin trends"
     )
@@ -45,7 +41,7 @@ class OperateDotFunAgentOutputSchema(BaseIOSchema):
     """This schema defines the output schema for the OperateDotFunAgent."""
 
     tweet_content: str = Field(
-        ..., 
+        ...,
         description="The content of the tweet to post."
         )
 
@@ -60,7 +56,6 @@ operate_dot_fun_agent = BaseAgent(
             openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         ),
         model="gpt-4o-mini",
-        memory=memory,
         system_prompt_generator=SystemPromptGenerator(
             background=[
                 "You are an engaging social media manager for Operate.fun.",
