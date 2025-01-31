@@ -1,7 +1,7 @@
 import os
 import asyncio
 from dotenv import load_dotenv
-from twikit import Client
+import tweepy
 
 from imaginary_agents.tools.pump_dot_fun_trends_tool import (
     PumpDotFunTrendsTool
@@ -18,30 +18,30 @@ from imaginary_agents.agents.metaspod_agent import (
 load_dotenv()
 
 # Get the Twitter API credentials from the environment variables
-USERNAME = os.getenv("TWITTER_USERNAME")
-EMAIL = os.getenv("TWITTER_EMAIL")
-PASSWORD = os.getenv("TWITTER_PASSWORD")
+TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
+TWITTER_API_KEY_SECRET = os.getenv("TWITTER_API_KEY_SECRET")
+TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
-if not all([USERNAME, EMAIL, PASSWORD]):
-    raise ValueError("Twitter login credentials are not set in the .env file")
+if not all(
+    [
+        TWITTER_API_KEY,
+        TWITTER_API_KEY_SECRET,
+        TWITTER_ACCESS_TOKEN,
+        TWITTER_ACCESS_TOKEN_SECRET
+    ]
+):
+    raise ValueError("Twitter API credentials are not set in the .env file")
 
-# Initialize the Twikit client
-client = Client('en-US')
+# Initialize the Tweepy client
+client = tweepy.Client(
+    consumer_key=TWITTER_API_KEY,
+    consumer_secret=TWITTER_API_KEY_SECRET,
+    access_token=TWITTER_ACCESS_TOKEN,
+    access_token_secret=TWITTER_ACCESS_TOKEN_SECRET
+)
 
 trending_memecoin_tool = PumpDotFunTrendsTool()
-
-
-async def login():
-    """Login to Twitter using twikit."""
-    try:
-        await client.login(
-            auth_info_1=USERNAME,
-            auth_info_2=EMAIL,
-            password=PASSWORD
-        )
-        print("Logged in successfully!")
-    except Exception as e:
-        print(f"Error logging in: {e}")
 
 
 async def create_post_with_agent():
@@ -69,25 +69,21 @@ async def create_post_with_agent():
         trending_memes_provider.memes = trending_memes.trending
 
         return metas_pod_agent_output.tweet_content
-
     except Exception as e:
         print(f"Error creating post: {e}")
         return None
 
 
 async def tweet(text: str):
-    """Post a tweet using twikit."""
+    """Post a tweet using tweepy."""
     try:
-        await client.create_tweet(text)
+        client.create_tweet(text=text)
         print("Tweet posted successfully!")
     except Exception as e:
         print(f"Error posting tweet: {e}")
 
 
 async def main():
-    # Perform login once
-    await login()
-
     while True:
         # Create a post with the agent
         post_content = await create_post_with_agent()
@@ -96,8 +92,8 @@ async def main():
         if post_content:
             await tweet(post_content)
 
-        # Wait for an hour before posting again
-        await asyncio.sleep(3600)
+        # Wait for 10 minutes before posting again
+        await asyncio.sleep(600)
 
 if __name__ == "__main__":
     asyncio.run(main())

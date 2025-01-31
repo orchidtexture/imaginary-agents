@@ -1,12 +1,10 @@
 import telebot
 import os
-import time
-import schedule
+# import time
+# import schedule
 from dotenv import load_dotenv
 
-from atomic_agents.agents.base_agent import (
-    BaseAgentInputSchema
-)
+from atomic_agents.agents.base_agent import BaseAgentInputSchema, BaseAgent
 from imaginary_agents.agents.operate_dot_fun import (
     operate_dot_fun_agent,
     OperateDotFunAgentInputSchema,
@@ -25,7 +23,7 @@ from imaginary_agents.tools.memecoin_descriptions_tool import (
     MemecoinDescriptionsToolInputSchema
 )
 from imaginary_agents.agents.community_manager_agent import (
-    community_manager_agent
+    community_manager_agent_config
 )
 
 # Load environment variables from the .env file
@@ -55,10 +53,12 @@ def send_welcome(message):
 # Define a handler for other text messages
 @bot.message_handler(func=lambda message: True)
 def reply_handler(message):
+    community_manager_agent = BaseAgent(community_manager_agent_config)
     reply = community_manager_agent.run(
         BaseAgentInputSchema(chat_message=message.text)
     )
     bot.reply_to(message, reply.chat_message)
+    dump_last_20_messages(message.chat.id)
 
 
 def post_to_channel(message):
@@ -120,6 +120,21 @@ def channel_post():
     content = create_post_with_agent()
     if content:
         post_to_channel(content)
+
+
+def dump_last_20_messages(chat_id):
+    """Fetch and print the last 20 messages for a specific chat."""
+    try:
+        updates = bot.get_updates()
+        messages = [
+            update.message for update in updates if update.message
+            and update.message.chat.id == chat_id
+        ]
+        last_20_messages = messages[-20:]
+        for msg in last_20_messages:
+            print(f"Chat ID: {msg.chat.id}, Message: {msg.text}")
+    except Exception as e:
+        print(f"Error fetching chat history: {e}")
 
 
 if __name__ == "__main__":

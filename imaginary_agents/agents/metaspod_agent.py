@@ -71,7 +71,10 @@ metas_pod_agent = BaseAgent(
                     "Don't add any additional words that suggest the ",
                     "memecoin performance"
                 ),
-                "Add a proper emoji after each word",
+                (
+                    "Add a proper emoji after each word, make sure the emoji",
+                    " is related to the word and it renders properly"
+                ),
                 "Post it on X"
             ],
             output_instructions=[
