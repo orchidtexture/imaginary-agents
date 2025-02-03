@@ -3,6 +3,7 @@ import sqlite3
 import telebot
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
+from telebot.types import BotCommand
 from atomic_agents.agents.base_agent import (
     BaseAgentInputSchema,
     BaseAgent,
@@ -56,8 +57,7 @@ def init_db():
 
 
 def store_user_memory(user_id, memory_dump):
-    """Stores or updates a user's memory in the database
-         (overwrites each time)."""
+    """Stores or updates a user's memory in the database."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("""
@@ -94,52 +94,71 @@ async def webhook(request: Request):
     return {"status": "ok"}
 
 
+def set_bot_commands():
+    """Sets the Telegram menu buttons"""
+    commands = [
+        BotCommand("create_post", "📝 Create a New Post")
+    ]
+    bot.set_my_commands(commands)
+
+
+set_bot_commands()
+
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "⏰ Time to OPERATE")
-
-
-@bot.message_handler(func=lambda message: True)
-def reply_handler(message):
-    """Handles user messages with persistent memory per user."""
-    print("📩 New message received")
     chat_id = message.chat.id
-    user_message = message.text
+    bot.send_message(chat_id, "⏰ Time to OPERATE")
 
-    # Fetch the last memory dump for this user
+
+def process_with_ai(chat_id, user_message):
+    """Handles processing messages with the AI agent."""
+    print(f"🤖 Processing AI request: {user_message}")
+
+    # Fetch user memory
     user_memory = get_user_memory(chat_id)
 
-    # Initialize a fresh agent for this user
+    # Initialize AI agent
     user_agent = BaseAgent(community_manager_agent_config)
 
     if user_memory is not None:
-        user_agent.memory.load(user_memory)  # Load user-specific memory
+        user_agent.memory.load(user_memory)  # Load memory
         print(f"🔄 Memory loaded for user {chat_id}")
 
-    # Attempt to process the user's message
+    # Run AI agent
     try:
-        reply = user_agent.run(
-            BaseAgentInputSchema(chat_message=user_message)
-        )
-        print("✅ Agent run successful")
+        reply = user_agent.run(BaseAgentInputSchema(chat_message=user_message))
+        print("✅ AI Agent executed successfully")
         bot_reply = reply.chat_message
     except Exception as e:
-        print(f"❌ Error processing message: {e}")
+        print(f"❌ Error processing AI agent: {e}")
         bot_reply = (
             "I'm having trouble processing your request. ",
             "Please try again later."
         )
 
-    # Send the reply (fallback message if an error occurs)
-    bot.reply_to(message, bot_reply)
+    # Send AI-generated reply
+    bot.send_message(chat_id, bot_reply)
 
-    # Store the bot's response and updated memory (overwriting previous memory)
+    # Store updated memory
     memory_dump = user_agent.memory.dump()
     store_user_memory(chat_id, memory_dump)
     print(f"💾 Memory stored for user {chat_id}")
 
-    # Reset the memory AFTER storing it (prepares for next interaction)
+    # Reset agent memory
     user_agent.memory = AgentMemory(max_messages=20)
+
+
+@bot.message_handler(commands=['create_post'])
+def handle_create_post(message):
+    """Handles 'Create Post' button click by triggering AI directly."""
+    process_with_ai(message.chat.id, "Craft a new X post")
+
+
+@bot.message_handler(func=lambda message: True)
+def reply_handler(message):
+    """Handles user messages and sends them to AI agent."""
+    process_with_ai(message.chat.id, message.text)
 
 
 def set_webhook():
