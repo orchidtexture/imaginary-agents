@@ -86,7 +86,7 @@ def home():
     return {"message": "Bot is running with FastAPI & Webhooks!"}
 
 
-@app.post("/webhook")
+@app.post("/cm_tg_bot/webhook")
 async def webhook(request: Request):
     """Handles incoming updates from Telegram via webhook"""
     update = await request.json()
