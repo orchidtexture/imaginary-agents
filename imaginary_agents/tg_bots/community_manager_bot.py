@@ -2,9 +2,7 @@ import os
 import sqlite3
 import telebot
 from fastapi import FastAPI, Request
-from pyngrok import ngrok
 from dotenv import load_dotenv
-
 from atomic_agents.agents.base_agent import (
     BaseAgentInputSchema,
     BaseAgent,
@@ -17,23 +15,32 @@ from imaginary_agents.agents.community_manager_agent import (
 # Load environment variables
 load_dotenv()
 
-# Get the bot token
+# Get bot token
 API_TOKEN = os.getenv("TELEBOT_API_TOKEN")
+DEVELOPMENT = os.getenv("DEVELOPMENT", "True").lower() == "true"
+PRODUCTION_URL = os.getenv("PRODUCTION_URL")
+
 if not API_TOKEN:
     raise ValueError("No TELEBOT_API_TOKEN found in .env file")
 
 bot = telebot.TeleBot(API_TOKEN)
 app = FastAPI()
 
-# Expose FastAPI using ngrok for local development
-public_url = ngrok.connect(8000).public_url
-WEBHOOK_URL = f"{public_url}/webhook"
-
 # SQLite Database File
 DB_FILE = "users.db"
 
+# Initialize ngrok if enabled
+if DEVELOPMENT:
+    from pyngrok import ngrok
+    public_url = ngrok.connect(8000).public_url
+    print(f"🌍 ngrok is enabled. Public URL: {public_url}")
+else:
+    public_url = PRODUCTION_URL
 
-# Initialize the database
+WEBHOOK_URL = f"{public_url}/cm_tg_bot/webhook"
+
+
+# Database Initialization
 def init_db():
     """Creates the users table if it doesn't exist (one row per user)."""
     conn = sqlite3.connect(DB_FILE)
@@ -50,7 +57,7 @@ def init_db():
 
 def store_user_memory(user_id, memory_dump):
     """Stores or updates a user's memory in the database
-        (overwrites each time)."""
+         (overwrites each time)."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("""
