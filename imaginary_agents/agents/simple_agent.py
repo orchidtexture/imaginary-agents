@@ -1,0 +1,111 @@
+import os
+from dotenv import load_dotenv
+import instructor
+import openai
+from pydantic import Field, create_model
+from typing import Dict, Any, List
+from atomic_agents.lib.components.system_prompt_generator import (
+    SystemPromptGenerator
+)
+from atomic_agents.agents.base_agent import (
+    BaseAgent,
+    BaseAgentConfig,
+    BaseIOSchema
+)
+
+load_dotenv()
+
+# API Key setup
+API_KEY = ""
+if not API_KEY:
+    API_KEY = os.getenv("OPENAI_API_KEY")
+
+if not API_KEY:
+    raise ValueError(
+        "API key is not set. Please set the API key as a static variable or "
+        "in the environment variable OPENAI_API_KEY."
+    )
+
+
+# OpenAI client setup using the Instructor library
+client = instructor.from_openai(openai.OpenAI(api_key=API_KEY))
+
+
+class SimpleAgent(BaseAgent):
+    """Simple Agent that receives input instructions and returns an output."""
+
+    def __init__(
+        self,
+        input_schema_fields: Dict[str, Dict[str, Any]],
+        output_schema_fields: Dict[str, Dict[str, Any]],
+        background: List[str],
+        steps: List[str],
+        output_instructions: List[str],
+        api_key: str = None,
+        model: str = "gpt-4"
+    ):
+        """
+        Initialize the SimpleAgent with dynamic schema definitions.
+
+        Args:
+            input_schema_fields: Dictionary of input fields
+                {name: {type, description}}
+            output_schema_fields: Dictionary of output fields
+                {name: {type, description}}
+            background: List of background context statements
+            steps: List of steps the agent should follow
+            output_instructions: List of instructions for output formatting
+            api_key: OpenAI API key (defaults to env var)
+            model: OpenAI model to use
+        """
+        # Create dynamic input and output schemas
+        SimpleAgentInputSchema = create_model(
+            'SimpleAgentInputSchema',
+            __base__=BaseIOSchema,
+            __doc__="Input schema for the SimpleAgent that defines the expected input structure.",
+            **{
+                name: (field_def['type'], Field(
+                    ...,
+                    description=field_def['description']
+                ))
+                for name, field_def in input_schema_fields.items()
+            }
+        )
+
+        SimpleAgentOutputSchema = create_model(
+            'SimpleAgentOutputSchema',
+            __base__=BaseIOSchema,
+            __doc__="Output schema for the SimpleAgent that defines the response structure.",
+            **{
+                name: (field_def['type'], Field(
+                    ..., description=field_def['description']
+                ))
+                for name, field_def in output_schema_fields.items()
+            }
+        )
+
+        # API key handling
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "API key must be provided or set in OPENAI_API_KEY env var"
+            )
+
+        # Create OpenAI client
+        client = instructor.from_openai(openai.OpenAI(api_key=self.api_key))
+
+        # Create agent config
+        config = BaseAgentConfig(
+            client=client,
+            model=model,
+            system_prompt_generator=SystemPromptGenerator(
+                background=background,
+                steps=steps,
+                output_instructions=output_instructions
+            ),
+            input_schema=SimpleAgentInputSchema,
+            output_schema=SimpleAgentOutputSchema
+        )
+
+        # Initialize base agent
+        super().__init__(config)
