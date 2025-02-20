@@ -73,7 +73,7 @@ PRODUCTION_URL = os.getenv("PRODUCTION_URL")
 # Initialize ngrok if enabled
 if DEVELOPMENT:
     from pyngrok import ngrok
-    public_url = ngrok.connect(8000).public_url
+    public_url = ngrok.connect(8776).public_url
     print(f"🌍 ngrok is enabled. Public URL: {public_url}")
 else:
     public_url = PRODUCTION_URL
@@ -208,7 +208,7 @@ def start_bot():
             print(f"✅ Webhook set to {WEBHOOK_URL}")
 
             # Start FastAPI server
-            uvicorn.run(app, host="0.0.0.0", port=8000)
+            uvicorn.run(app, host="0.0.0.0", port=8776)
         except Exception as e:
             print(f"❌ Error: {e}")
             time.sleep(5)  # Prevent instant restart loop
