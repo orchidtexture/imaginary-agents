@@ -1,3 +1,4 @@
+import json
 import os
 import telebot
 import time
@@ -5,6 +6,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 from telebot.types import BotCommand
+from telebot.apihelper import ApiTelegramException
 from imaginary_agents.database.chatbot_db import chatbot_db
 from atomic_agents.agents.base_agent import (
     BaseAgentInputSchema,
@@ -12,63 +14,75 @@ from atomic_agents.agents.base_agent import (
 )
 from imaginary_agents.agents.chatbot_agent import ChatbotAgent
 
-# Params passed by agent.run_agent
-# chatbot_agent: ChatbotAgent instance
-# imaginary_agents_api_key: str
-# bot_name: str
-
 # Load environment variables
 load_dotenv()
 
-# API Key setup
-API_KEY = ""
-if not API_KEY:
-    API_KEY = os.getenv("OPENAI_API_KEY")
+background = json.loads(os.getenv('BACKGROUND', '[]'))
+steps = json.loads(os.getenv('STEPS', '[]'))
+output_instructions = json.loads(os.getenv('OUTPUT_INSTRUCTIONS', '[]'))
+llm_api_key = os.getenv('LLM_API_KEY', '')
+encrypted_bot_token = os.getenv('ENCRYPTED_BOT_TOKEN', '')
+imaginary_agents_api_key = os.getenv('IMAGINARY_AGENTS_API_KEY', '')
+bot_name = os.getenv('AGENT_NAME', '')
 
-if not API_KEY:
-    raise ValueError(
-        "API key is not set. Please set the API key as a static variable or "
-        "in the environment variable OPENAI_API_KEY."
-    )
+DEVELOPMENT = os.getenv("DEVELOPMENT", "True").lower() == "true"
+PRODUCTION_URL = os.getenv("PRODUCTION_URL")
 
-# Define encryption password and platform user details
-IMAGINARY_AGENTS_API_KEY = os.getenv("IMAGINARY_AGENTS_API_KEY")
 
-# Bot token
-# TODO: Retrieve from database is set when bot is created
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Add this after loading environment variables
+def validate_environment():
+    """Validate required environment variables."""
+    required_vars = {
+        'ENCRYPTED_BOT_TOKEN': encrypted_bot_token,
+        'IMAGINARY_AGENTS_API_KEY': imaginary_agents_api_key,
+        'LLM_API_KEY': llm_api_key,
+        'AGENT_NAME': bot_name,
+        'BACKGROUND': background,
+        'STEPS': steps,
+        'OUTPUT_INSTRUCTIONS': output_instructions
+    }
 
-# Encrypt bot token
-ENCRYPTED_BOT_TOKEN = chatbot_db.encrypt_bot_token(
-    BOT_TOKEN,
-    IMAGINARY_AGENTS_API_KEY
-)
+    missing_vars = [k for k, v in required_vars.items() if not v]
+    if missing_vars:
+        raise ValueError(
+            f"Missing required environment variables: {
+                ', '.join(missing_vars)
+            }"
+        )
+
+    if not DEVELOPMENT and not PRODUCTION_URL:
+        raise ValueError(
+            "PRODUCTION_URL must be set when not in development mode"
+        )
+
+
+# Add this right after environment variable loading
+validate_environment()
 
 # Register the platform user in MongoDB (if not already registered)
 # TODO: create a user service to abstract from here
-USER_ID = chatbot_db.register_user(IMAGINARY_AGENTS_API_KEY)
+USER_ID = chatbot_db.register_user(imaginary_agents_api_key)
 
 # Register or retrieve the chatbot ID
 # TODO: create a chatbot service to abstract from here
 CHATBOT_ID = chatbot_db.register_chatbot(
-    bot_name="chef_agent_bot",  # TODO: set by user
+    bot_name=bot_name,
     platform="telegram",
-    owner_id=USER_ID,
-    encrypted_token=ENCRYPTED_BOT_TOKEN
+    owner_id=USER_ID
 )
 
 # Retrieve bot token securely from DB
-SECURE_BOT_TOKEN = chatbot_db.get_bot_token(
-    CHATBOT_ID,
-    IMAGINARY_AGENTS_API_KEY
+DECRYPTED_BOT_TOKEN = chatbot_db.decrypt_bot_token(
+    encrypted_bot_token,
+    imaginary_agents_api_key
 )
 
 # Initialize bot
-bot = telebot.TeleBot(SECURE_BOT_TOKEN)
+bot = telebot.TeleBot(DECRYPTED_BOT_TOKEN)
 app = FastAPI()
 
-DEVELOPMENT = os.getenv("DEVELOPMENT", "True").lower() == "true"
-PRODUCTION_URL = os.getenv("PRODUCTION_URL")
+# Get the first 32 digits of the encrypted token
+BOT_TOKEN_DIGITS = encrypted_bot_token[:32] if encrypted_bot_token else ""
 
 # Initialize ngrok if enabled
 if DEVELOPMENT:
@@ -78,7 +92,7 @@ if DEVELOPMENT:
 else:
     public_url = PRODUCTION_URL
 
-WEBHOOK_URL = f"{public_url}/cm_tg_bot/webhook"
+WEBHOOK_URL = f"{public_url}/telegram/{BOT_TOKEN_DIGITS}"
 
 
 # **🔹 FastAPI Routes (Webhook)**
@@ -87,12 +101,40 @@ def home():
     return {"message": "Bot is running with FastAPI & Webhooks!"}
 
 
-@app.post("/cm_tg_bot/webhook")   # TODO: add chatbot_id for multiple users
-async def webhook(request: Request):
+@app.post("/telegram/{token}")
+async def webhook(token: str, request: Request):
     """Handles incoming updates from Telegram via webhook."""
+    if token != BOT_TOKEN_DIGITS:
+        return {"status": "unauthorized"}
+
     update = await request.json()
     bot.process_new_updates([telebot.types.Update.de_json(update)])
     return {"status": "ok"}
+
+
+def set_bot_commands_with_retry(bot, commands, max_retries=3, initial_delay=1):
+    """Sets Telegram menu buttons with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            bot.set_my_commands(commands)
+            print("Bot commands set successfully")
+            return True
+        except ApiTelegramException as e:
+            if e.error_code == 429:  # Too Many Requests
+                retry_after = e.result_json.get(
+                    'parameters', {}
+                ).get('retry_after', initial_delay * (2 ** attempt))
+                print(f"⚠️ Rate limited. Waiting {retry_after} seconds...")
+                time.sleep(retry_after)
+                continue
+            else:
+                print(f"Telegram API Error: {e}")
+                raise
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            raise
+
+    raise RuntimeError("Failed to set bot commands after maximum retries")
 
 
 # **🔹 Telegram Bot Commands**
@@ -102,7 +144,7 @@ def set_bot_commands():
         BotCommand("create_post", "📝 Create a New Post"),
         BotCommand("delete_memory", "🗑 Delete Memory")
     ]
-    bot.set_my_commands(commands)
+    set_bot_commands_with_retry(bot, commands)
 
 
 set_bot_commands()
@@ -135,7 +177,7 @@ def handle_create_post(message):
 def delete_memory(message):
     """Deletes stored memory for the user."""
     chatbot_db.delete_user_memory(message.chat.id)
-    bot.send_message(message.chat.id, "🗑 Chat memory has been deleted.")
+    bot.send_message(message.chat.id, "Chat memory has been deleted.")
 
 
 @bot.message_handler(func=lambda message: True)
@@ -147,32 +189,24 @@ def reply_handler(message):
 # **🔹 AI Processing Function**
 def process_with_ai(chat_id, user_message):
     """Handles AI-based message processing."""
-    print(f"🤖 Processing AI request: {user_message}")
+    print(f"Processing AI request: {user_message}")
 
     # Fetch stored user memory
     user_memory = chatbot_db.get_user_memory(chat_id)
 
     # Initialize AI agent
-    # user_agent = BaseAgent(community_manager_agent_config)
     user_agent = ChatbotAgent(
-        background=[
-            "You are an expert chef",
-            "you now plenty of recipes from all around the world"
-        ],
-        steps=[
-            "Given an ingredient provided by the user find a country where it is used widely",
-            "Think of a recipe that uses that main ingredient",
-            "Output the recipe with full list of ingredients and step by step instructions to cook it"
-        ],
-        output_instructions=[
-            "You are a knowledgeable chef that is always ready to help"
-        ],
-        api_key=API_KEY
+        background=background,
+        steps=steps,
+        output_instructions=output_instructions,
+        llm_api_key=llm_api_key
     )
+
+    print(user_agent)
 
     if user_memory is not None:
         user_agent.memory.load(user_memory)  # Load previous memory
-        print(f"🔄 Memory loaded for user {chat_id}")
+        print(f"Memory loaded for user {chat_id}")
 
     # Run AI agent
     try:
@@ -181,7 +215,7 @@ def process_with_ai(chat_id, user_message):
         print("reply generated")
         bot_reply = reply.chat_message
     except Exception as e:
-        print(f"❌ AI Error: {e}")
+        print(f"AI Error: {e}")
         bot_reply = (
             "I'm having trouble processing your request. ",
             "Please try again later."
@@ -201,17 +235,71 @@ def process_with_ai(chat_id, user_message):
 # **🔹 Start Bot & Server Function**
 def start_bot():
     """Start the bot and FastAPI server."""
-    while True:
-        try:
-            bot.remove_webhook()
-            bot.set_webhook(url=WEBHOOK_URL)
-            print(f"✅ Webhook set to {WEBHOOK_URL}")
+    try:
+        # Verify bot token is valid
+        if not DECRYPTED_BOT_TOKEN:
+            raise ValueError("Bot token is not properly decrypted or missing")
 
-            # Start FastAPI server
-            uvicorn.run(app, host="0.0.0.0", port=8776)
+        # Test bot connection
+        bot_info = bot.get_me()
+        print(f"Connected to bot: @{bot_info.username}")
+
+        # Setup webhook
+        try:
+            setup_webhook_with_retry(bot, WEBHOOK_URL)
+        except Exception as webhook_error:
+            print(f"Webhook Error: {webhook_error}")
+            raise
+
+        # Configure FastAPI
+        if not app.routes:
+            print("Error: No routes configured in FastAPI app")
+            raise ValueError("FastAPI app is not properly configured")
+
+        print("Starting FastAPI server...")
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=8776,
+            log_level="info",
+            access_log=True
+        )
+
+    except Exception as e:
+        error_msg = f"Bot startup failed: {str(e)}"
+        print(error_msg)
+        raise RuntimeError(error_msg)
+
+
+def setup_webhook_with_retry(bot, webhook_url, max_retries=3, initial_delay=1):
+    """Setup webhook with exponential backoff retry logic."""
+    for attempt in range(max_retries):
+        try:
+            # Remove existing webhook
+            bot.remove_webhook()
+            time.sleep(0.5)  # Small delay between remove and set
+
+            # Set new webhook
+            bot.set_webhook(url=webhook_url)
+            print(f"Webhook set successfully to {webhook_url}")
+            return True
+
+        except ApiTelegramException as e:
+            if e.error_code == 429:  # Too Many Requests
+                retry_after = e.result_json.get(
+                    'parameters', {}
+                ).get('retry_after', initial_delay * (2 ** attempt))
+                print(f"⚠️ Rate limited. Waiting {retry_after} seconds...")
+                time.sleep(retry_after)
+                continue
+            else:
+                print(f"Telegram API Error: {e}")
+                raise
         except Exception as e:
-            print(f"❌ Error: {e}")
-            time.sleep(5)  # Prevent instant restart loop
+            print(f"Unexpected error: {e}")
+            raise
+
+    raise RuntimeError("Failed to set webhook after maximum retries")
 
 
 def run():

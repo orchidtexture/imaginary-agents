@@ -15,7 +15,7 @@ class ChatbotAgent(BaseAgent):
         background: List[str],
         steps: List[str],
         output_instructions: List[str],
-        api_key: str = None,
+        llm_api_key: str = None,
         model: str = "gpt-4"
     ):
         """
@@ -25,19 +25,20 @@ class ChatbotAgent(BaseAgent):
             background: List of background context statements
             steps: List of steps the agent should follow
             output_instructions: List of instructions for output formatting
-            api_key: OpenAI API key (defaults to env var)
+            llm_api_key: OpenAI API key (defaults to env var)
             model: OpenAI model to use
         """
 
         # API key handling
-        self.api_key = api_key
-        if not self.api_key:
+        if not llm_api_key:
             raise ValueError(
                 "API key must be provided"
             )
 
         # Create OpenAI client
-        client = instructor.from_openai(openai.OpenAI(api_key=self.api_key))
+        client = instructor.from_openai(
+            openai.OpenAI(api_key=llm_api_key)
+        )
 
         # Create agent config
         config = BaseAgentConfig(
