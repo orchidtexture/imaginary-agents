@@ -22,9 +22,14 @@ class ChatBotDBManager:
         self.db = self.client[os.getenv("MONGO_DB_NAME", "imaginary_agents")]
         self.users_collection = self.db["users"]  # Platform users
         self.chatbots_collection = self.db["chatbots"]  # Chatbots
-        # Ensure unique index on bot_name and owner_id
+
+        # Ensure unique indexes
         self.chatbots_collection.create_index(
-            [("bot_name", 1), ("owner_id", 1)], 
+            [("bot_name", 1), ("owner_id", 1)],
+            unique=True
+        )
+        self.users_collection.create_index(
+            "api_key",
             unique=True
         )
         self.chatbot_users_collection = self.db["chatbot_users"]
@@ -44,23 +49,23 @@ class ChatBotDBManager:
         return fernet.decrypt(encrypted_token.encode()).decode()
 
     def register_user(self, api_key: str):
-        """Registers a platform user."""
-        user = self.users_collection.find_one({"api_key": api_key})
-        if user:
+        """Registers a platform user with unique API key."""
+        try:
+            user_entry = {
+                "api_key": api_key,
+                "chatbot_ids": []
+            }
+            result = self.users_collection.insert_one(user_entry)
+            return result.inserted_id  # Return new user _id
+        except DuplicateKeyError:
+            # If API key already exists, return existing user
+            user = self.users_collection.find_one({"api_key": api_key})
             return user["_id"]  # Return existing user_id
-
-        user_entry = {
-            "api_key": api_key,
-            "chatbot_ids": []
-        }
-        result = self.users_collection.insert_one(user_entry)
-        return result.inserted_id  # Return new user _id
 
     def register_chatbot(
         self, bot_name: str,
         platform: str,
         owner_id: str,
-        encrypted_token: str
     ):
         """Registers a chatbot and ensures it exists in the database."""
         try:
@@ -68,7 +73,6 @@ class ChatBotDBManager:
                 "bot_name": bot_name,
                 "platform": platform,
                 "owner_id": ObjectId(owner_id),
-                "encrypted_bot_token": encrypted_token,
                 "chatbot_users_ids": []  # Empty initially
             }
             result = self.chatbots_collection.insert_one(bot_entry)
@@ -121,13 +125,6 @@ class ChatBotDBManager:
     def get_bot_by_id(self, chatbot_id: str):
         """Retrieves bot details using _id."""
         return self.chatbots_collection.find_one({"_id": ObjectId(chatbot_id)})
-
-    def get_bot_token(self, chatbot_id: str, key: str) -> str:
-        """Retrieves and decrypts the bot token for a chatbot."""
-        bot = self.get_bot_by_id(chatbot_id)
-        if bot and "encrypted_bot_token" in bot:
-            return self.decrypt_bot_token(bot["encrypted_bot_token"], key)
-        return None
 
     def store_user_memory(self, telegram_user_id: int, memory_dump: dict):
         """Stores or updates a user's memory."""
