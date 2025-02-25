@@ -1,7 +1,7 @@
 import os
-import uvicorn
 import logging
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, List
 from pydantic import BaseModel
 
@@ -16,7 +16,20 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-app = FastAPI()
+app = FastAPI(
+    title="Imaginary Agents Bot API",
+    description="API for interacting with various AI agent Bots",
+    version="1.0.0"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class BotStartRequest(BaseModel):
@@ -38,15 +51,22 @@ class BotManager:
         try:
             docs = self.collection.find({})
             for doc in docs:
-                token = doc["token"]
-                self.bot_configs[token] = {
-                    "bot_id": doc["_id"],
-                    "agent_name": doc.get("agent_name"),
-                    "background": doc.get("background"),
-                    "steps": doc.get("steps"),
-                    "output_instructions": doc.get("output_instructions"),
-                }
-                self.bot_registry[token] = None
+                if doc["isRunning"] is True:
+                    token = doc["token"]
+                    bot_id = doc["_id"]
+                    agent_name = doc.get("agent_name")
+                    background = doc.get("background")
+                    steps = doc.get("steps")
+                    output_instructions = doc.get("output_instructions")
+                    self.bot_configs[token] = {
+                        "bot_id": bot_id,
+                        "agent_name": agent_name,
+                        "background": background,
+                        "steps": steps,
+                        "output_instructions": output_instructions
+                    }
+                    bot_instance = self.get_bot_instance(token)
+                    self.bot_registry[token] = bot_instance
             logger.info(
                 "Loaded %d bot configurations from MongoDB",
                 len(self.bot_configs)
@@ -57,7 +77,7 @@ class BotManager:
                 e
             )
 
-    def _save_registry(self):
+    def _save_registry(self, isRunning):
         try:
             for token, config in self.bot_configs.items():
                 data = {
@@ -66,7 +86,9 @@ class BotManager:
                     "background": config["background"],
                     "steps": config["steps"],
                     "output_instructions": config["output_instructions"],
+                    "isRunning": isRunning
                 }
+                logger.info("Saving bot configuration to MongoDB: %s", data)
                 result = self.collection.find_one_and_update(
                     {"token": token},
                     {"$set": data},
@@ -86,7 +108,7 @@ class BotManager:
         public_url = os.getenv("PUBLIC_URL")
         if not public_url:
             raise ValueError("PUBLIC_URL must be set in .env file")
-        return f"{public_url}/telegram/{token}"
+        return f"{public_url}/bots/telegram/webhook/{token}"
 
     def start_bot(self, token: str, agent_name: str, background: List[str],
                   steps: List[str], output_instructions: List[str]):
@@ -110,7 +132,7 @@ class BotManager:
                 "steps": steps,
                 "output_instructions": output_instructions,
             }
-            self._save_registry()
+            self._save_registry(True)
             webhook_url = self.get_webhook_url(token)
             bot_instance.set_webhook(webhook_url)
             return {
@@ -122,12 +144,14 @@ class BotManager:
     def stop_bot(self, token: str):
         if token not in self.bot_registry or self.bot_registry[token] is None:
             raise HTTPException(status_code=404, detail="Bot not found.")
-        bot_instance = self.bot_registry[token]
-        bot_instance.remove_webhook()
-        del self.bot_registry[token]
-        if token in self.bot_configs:
+        try:
+            self._save_registry(False)  # Update isRunning before del registry
+            bot_instance = self.bot_registry[token]
+            bot_instance.remove_webhook()
+            del self.bot_registry[token]
             del self.bot_configs[token]
-        self._save_registry()
+        except Exception as e:
+            raise HTTPException(status_code=409, detail=str(e))
         return {"message": "Bot stopped and webhook removed."}
 
     def list_bots(self):
@@ -153,7 +177,7 @@ class BotManager:
 bot_manager = BotManager()
 
 
-@app.post("/start_bot/{token}")
+@app.post("/bots/telegram/start_bot/{token}")
 def start_bot(token: str, req: BotStartRequest):
     return bot_manager.start_bot(
         token,
@@ -164,17 +188,26 @@ def start_bot(token: str, req: BotStartRequest):
     )
 
 
-@app.post("/stop_bot/{token}")
+@app.post("/bots/telegram/stop_bot/{token}")
 def stop_bot(token: str):
     return bot_manager.stop_bot(token)
 
 
-@app.get("/list_bots")
+@app.get("/bots/telegram/list_bots")
 def list_bots():
     return bot_manager.list_bots()
 
 
-@app.post("/telegram/{token}")
+@app.get("/bots/telegram/get_bot_status/{token}")
+def bot_status(token: str):
+    running_bots = bot_manager.list_bots()
+    if token in running_bots["running_bots"]:
+        return {"running": True}
+    else:
+        return {"running": False}
+
+
+@app.post("/bots/telegram/webhook/{token}")
 async def telegram_webhook(token: str, request: Request):
     if token not in bot_manager.bot_configs:
         raise HTTPException(status_code=404, detail="Bot not found.")
@@ -196,22 +229,18 @@ async def telegram_webhook(token: str, request: Request):
     return {"status": "ok"}
 
 
-@app.get("/bot_details/{token}")
-def bot_status(token: str):
+@app.get("/bots/telegram/bot_details/{token}")
+def bot_details(token: str):
     if token not in bot_manager.bot_configs:
         raise HTTPException(status_code=404, detail="Bot not found.")
     bot_instance = bot_manager.get_bot_instance(token)
     webhook_url = bot_manager.get_webhook_url(token)
     return {
         "token": token[:8],
-        "running": True,
+        "isRunning": True,  # If bot exists in bot_configs, it is running
         "webhook_url": webhook_url,
         "agent_name": bot_instance.agent_name,
         "background": bot_instance.background,
         "steps": bot_instance.steps,
         "output_instructions": bot_instance.output_instructions,
     }
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8776, log_level="info")
