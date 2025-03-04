@@ -34,7 +34,7 @@ class TelegramAgentBot:
         def send_welcome(message):
             self.bot.send_message(message.chat.id, "Welcome to the bot!")
 
-        register_commands(self.bot)
+        register_commands(self)
 
         @self.bot.message_handler(func=lambda message: True)
         def reply_handler(message):

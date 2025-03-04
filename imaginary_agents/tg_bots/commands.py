@@ -1,4 +1,3 @@
-import telebot
 import logging
 from .utils.process_AI_agent_response import process_AI_agent_response
 
@@ -18,12 +17,14 @@ def get_channel_name(bot):
         return "Unknown Channel"  # Fallback if error occurs
 
 
-def register_commands(bot: telebot.TeleBot):
+def register_commands(agent):
     """Registers custom bot commands."""
+
+    bot = agent.bot
 
     @bot.message_handler(commands=['post'])
     def ask_for_message(message):
-        """Step 1: Ask user what to post."""
+        """Ask user what to post."""
         user_id = message.chat.id
         channel_name = get_channel_name(bot)
         bot.send_message(
@@ -33,14 +34,16 @@ def register_commands(bot: telebot.TeleBot):
         bot.register_next_step_handler(
             message,
             post_to_channel,
-            bot
+            agent,
+            channel_name
         )
 
 
-def post_to_channel(message, bot):
-    """Step 2: Post user message to channel."""
+def post_to_channel(message, agent, channel_name):
+    """Post user message to channel."""
     user_message = message.text
     user_id = message.chat.id
+    bot = agent.bot
 
     if not user_message:  # Ensure the message is not empty
         bot.send_message(user_id, "❌ Invalid message. Please try again.")
@@ -48,11 +51,11 @@ def post_to_channel(message, bot):
 
     try:
         logger.info("Posting to channel")
-        response = process_AI_agent_response(bot, user_id, user_message)
-        bot.send_message(CHANNEL_ID, response)
+        response = process_AI_agent_response(agent, user_id, user_message)
+        bot.send_message(CHANNEL_ID, response["reply"])
         bot.send_message(
             user_id,
-            "✅ A response has been posted successfully!"
+            f"✅ A response has been posted successfully to *{channel_name}*!"
         )
     except Exception as e:
         logger.error(f"Error posting to channel: {e}")

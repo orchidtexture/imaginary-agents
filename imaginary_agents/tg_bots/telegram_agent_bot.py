@@ -2,8 +2,15 @@ import json
 import os
 import telebot
 import time
-import uvicorn
-from fastapi import FastAPI, Request
+import requests
+import asyncio
+import logging
+from imaginary_agents.tg_bots.bot_manager import (
+    bot_manager,
+    register_bot,
+    setup_webhook
+)
+from fastapi import FastAPI
 from dotenv import load_dotenv
 from telebot.types import BotCommand
 from telebot.apihelper import ApiTelegramException
@@ -29,7 +36,6 @@ DEVELOPMENT = os.getenv("DEVELOPMENT", "True").lower() == "true"
 PRODUCTION_URL = os.getenv("PRODUCTION_URL")
 
 
-# Add this after loading environment variables
 def validate_environment():
     """Validate required environment variables."""
     required_vars = {
@@ -56,7 +62,6 @@ def validate_environment():
         )
 
 
-# Add this right after environment variable loading
 validate_environment()
 
 # Register the platform user in MongoDB (if not already registered)
@@ -81,35 +86,31 @@ DECRYPTED_BOT_TOKEN = chatbot_db.decrypt_bot_token(
 bot = telebot.TeleBot(DECRYPTED_BOT_TOKEN)
 app = FastAPI()
 
+
 # Get the first 32 digits of the encrypted token
 BOT_TOKEN_DIGITS = encrypted_bot_token[:32] if encrypted_bot_token else ""
 
-# Initialize ngrok if enabled
-if DEVELOPMENT:
-    from pyngrok import ngrok
-    public_url = ngrok.connect(8776).public_url
-    print(f"🌍 ngrok is enabled. Public URL: {public_url}")
-else:
-    public_url = PRODUCTION_URL
+WEBHOOK_URL = bot_manager.get_webhook_url(BOT_TOKEN_DIGITS)
 
-WEBHOOK_URL = f"{public_url}/telegram/{BOT_TOKEN_DIGITS}"
+# Configure logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-# **🔹 FastAPI Routes (Webhook)**
-@app.get("/")
-def home():
-    return {"message": "Bot is running with FastAPI & Webhooks!"}
+async def keep_alive():
+    """Keep the bot process alive and handle health checks."""
+    while True:
+        try:
+            response = await asyncio.get_event_loop().run_in_executor(
+                None, 
+                lambda: requests.get("http://localhost:8776/")
+            )
+            if response.status_code != 200:
+                print("⚠️ Bot manager not responding properly")
+        except Exception as e:
+            print(f"⚠️ Error checking bot manager: {e}")
 
-
-@app.post("/telegram/{token}")
-async def webhook(token: str, request: Request):
-    """Handles incoming updates from Telegram via webhook."""
-    if token != BOT_TOKEN_DIGITS:
-        return {"status": "unauthorized"}
-
-    update = await request.json()
-    bot.process_new_updates([telebot.types.Update.de_json(update)])
-    return {"status": "ok"}
+        await asyncio.sleep(60)
 
 
 def set_bot_commands_with_retry(bot, commands, max_retries=3, initial_delay=1):
@@ -244,62 +245,28 @@ def start_bot():
         bot_info = bot.get_me()
         print(f"Connected to bot: @{bot_info.username}")
 
+        # Register bot with the manager
+        if not register_bot(BOT_TOKEN_DIGITS, bot):
+            print("Bot already registered, using existing registration")
+
         # Setup webhook
         try:
-            setup_webhook_with_retry(bot, WEBHOOK_URL)
+            if setup_webhook(bot, WEBHOOK_URL):
+                print(f"Bot registered and webhook set to {WEBHOOK_URL}")
         except Exception as webhook_error:
             print(f"Webhook Error: {webhook_error}")
             raise
 
-        # Configure FastAPI
-        if not app.routes:
-            print("Error: No routes configured in FastAPI app")
-            raise ValueError("FastAPI app is not properly configured")
+        # Start the keep-alive loop
+        print("Starting keep-alive loop...")
+        asyncio.run(keep_alive())
 
-        print("Starting FastAPI server...")
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=8776,
-            log_level="info",
-            access_log=True
-        )
-
+    except KeyboardInterrupt:
+        print("\nBot stopped by user")
     except Exception as e:
         error_msg = f"Bot startup failed: {str(e)}"
         print(error_msg)
         raise RuntimeError(error_msg)
-
-
-def setup_webhook_with_retry(bot, webhook_url, max_retries=3, initial_delay=1):
-    """Setup webhook with exponential backoff retry logic."""
-    for attempt in range(max_retries):
-        try:
-            # Remove existing webhook
-            bot.remove_webhook()
-            time.sleep(0.5)  # Small delay between remove and set
-
-            # Set new webhook
-            bot.set_webhook(url=webhook_url)
-            print(f"Webhook set successfully to {webhook_url}")
-            return True
-
-        except ApiTelegramException as e:
-            if e.error_code == 429:  # Too Many Requests
-                retry_after = e.result_json.get(
-                    'parameters', {}
-                ).get('retry_after', initial_delay * (2 ** attempt))
-                print(f"⚠️ Rate limited. Waiting {retry_after} seconds...")
-                time.sleep(retry_after)
-                continue
-            else:
-                print(f"Telegram API Error: {e}")
-                raise
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            raise
-
-    raise RuntimeError("Failed to set webhook after maximum retries")
 
 
 def run():

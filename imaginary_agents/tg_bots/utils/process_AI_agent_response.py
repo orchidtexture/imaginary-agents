@@ -48,6 +48,7 @@ def process_AI_agent_response(bot: telebot.TeleBot, chat_id, user_message):
         output_instructions=bot.output_instructions,
         llm_api_key=LLM_API_KEY
     )
+    print(f"Initialized agent for user {chat_id}")
 
     # Run AI agent
     try:
