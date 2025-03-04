@@ -12,7 +12,7 @@ from imaginary_agents.agents.simple_agent import SimpleAgent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/agent", tags=["agents"])
+router = APIRouter(prefix="/agent", tags=["Simple Agents"])
 
 load_dotenv()
 

@@ -1,9 +1,7 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException
 from typing import Dict, List
-from pydantic import BaseModel
 
 
 from imaginary_agents.tg_bots.bot import TelegramAgentBot
@@ -16,27 +14,6 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-app = FastAPI(
-    title="Imaginary Agents Bot API",
-    description="API for interacting with various AI agent Bots",
-    version="1.0.0"
-)
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-class BotStartRequest(BaseModel):
-    agent_name: str
-    background: List[str]
-    steps: List[str]
-    output_instructions: List[str]
 
 
 class BotManager:
@@ -175,72 +152,3 @@ class BotManager:
 
 
 bot_manager = BotManager()
-
-
-@app.post("/bots/telegram/start_bot/{token}")
-def start_bot(token: str, req: BotStartRequest):
-    return bot_manager.start_bot(
-        token,
-        agent_name=req.agent_name,
-        background=req.background,
-        steps=req.steps,
-        output_instructions=req.output_instructions
-    )
-
-
-@app.post("/bots/telegram/stop_bot/{token}")
-def stop_bot(token: str):
-    return bot_manager.stop_bot(token)
-
-
-@app.get("/bots/telegram/list_bots")
-def list_bots():
-    return bot_manager.list_bots()
-
-
-@app.get("/bots/telegram/get_bot_status/{token}")
-def bot_status(token: str):
-    running_bots = bot_manager.list_bots()
-    if token in running_bots["running_bots"]:
-        return {"running": True}
-    else:
-        return {"running": False}
-
-
-@app.post("/bots/telegram/webhook/{token}")
-async def telegram_webhook(token: str, request: Request):
-    if token not in bot_manager.bot_configs:
-        raise HTTPException(status_code=404, detail="Bot not found.")
-    update = await request.json()
-    chat_id = update.get("message", {}).get("chat", {}).get("id")
-    if chat_id:
-        bot_id = bot_manager.bot_configs[token].get("bot_id")
-        if bot_id:
-            bot_manager.users_collection.update_one(
-                {"bot_id": bot_id, "telegram_user_id": chat_id},
-                {"$set": {
-                    "bot_id": bot_id,
-                    "telegram_user_id": chat_id
-                }},
-                upsert=True
-            )
-    bot_instance = bot_manager.get_bot_instance(token)
-    bot_instance.process_webhook(update)
-    return {"status": "ok"}
-
-
-@app.get("/bots/telegram/bot_details/{token}")
-def bot_details(token: str):
-    if token not in bot_manager.bot_configs:
-        raise HTTPException(status_code=404, detail="Bot not found.")
-    bot_instance = bot_manager.get_bot_instance(token)
-    webhook_url = bot_manager.get_webhook_url(token)
-    return {
-        "token": token[:8],
-        "isRunning": True,  # If bot exists in bot_configs, it is running
-        "webhook_url": webhook_url,
-        "agent_name": bot_instance.agent_name,
-        "background": bot_instance.background,
-        "steps": bot_instance.steps,
-        "output_instructions": bot_instance.output_instructions,
-    }
