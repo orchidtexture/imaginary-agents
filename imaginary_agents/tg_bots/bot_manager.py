@@ -85,7 +85,7 @@ class BotManager:
         public_url = os.getenv("PUBLIC_URL")
         if not public_url:
             raise ValueError("PUBLIC_URL must be set in .env file")
-        return f"{public_url}/bots/telegram/webhook/{token}"
+        return f"{public_url}/api/v1/bots/telegram/webhook/{token}"
 
     def start_bot(self, token: str, agent_name: str, background: List[str],
                   steps: List[str], output_instructions: List[str]):

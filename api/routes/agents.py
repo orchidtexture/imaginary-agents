@@ -12,7 +12,7 @@ from imaginary_agents.agents.simple_agent import SimpleAgent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/agent", tags=["Simple Agents"])
+router = APIRouter(prefix="/agents/simple", tags=["Simple Agents"])
 
 load_dotenv()
 
@@ -105,7 +105,9 @@ async def run_agent(config: AgentRunRequest):
                 except Exception as e:
                     raise ValueError(f"Invalid input data: {str(e)}")
             else:
-                return {"message": "Agent initialized successfully, but no input data provided."}
+                return {
+                    "message": "Agent initialized successfully, but no input data provided."
+                }
 
         elif config.type == "telegram":
             logger.info("Launching Telegram bot with PM2...")
