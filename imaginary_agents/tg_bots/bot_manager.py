@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, List
+from imaginary_agents.helpers.encription_helper import generate_user_encryption_key
 from pydantic import BaseModel
 
 
@@ -33,6 +34,9 @@ app.add_middleware(
 
 
 class BotStartRequest(BaseModel):
+    # agent_id: str
+    token: str
+    llm_api_key: str
     agent_name: str
     background: List[str]
     steps: List[str]
@@ -52,18 +56,23 @@ class BotManager:
             docs = self.collection.find({})
             for doc in docs:
                 if doc["isRunning"] is True:
+                    # print(doc)
                     token = doc["token"]
                     bot_id = doc["_id"]
+                    agent_id = doc["agent_id"]
                     agent_name = doc.get("agent_name")
                     background = doc.get("background")
                     steps = doc.get("steps")
                     output_instructions = doc.get("output_instructions")
+                    llm_api_key = doc.get("llm_api_key")
+                    print(llm_api_key)
                     self.bot_configs[token] = {
-                        "bot_id": bot_id,
+                        "agent_id": agent_id,
                         "agent_name": agent_name,
                         "background": background,
                         "steps": steps,
-                        "output_instructions": output_instructions
+                        "output_instructions": output_instructions,
+                        "llm_api_key": llm_api_key
                     }
                     bot_instance = self.get_bot_instance(token)
                     self.bot_registry[token] = bot_instance
@@ -81,11 +90,13 @@ class BotManager:
         try:
             for token, config in self.bot_configs.items():
                 data = {
+                    "agent_id": config["agent_id"],
                     "token": token,
                     "agent_name": config["agent_name"],
                     "background": config["background"],
                     "steps": config["steps"],
                     "output_instructions": config["output_instructions"],
+                    "llm_api_key": config["llm_api_key"],
                     "isRunning": isRunning
                 }
                 logger.info("Saving bot configuration to MongoDB: %s", data)
@@ -110,8 +121,16 @@ class BotManager:
             raise ValueError("PUBLIC_URL must be set in .env file")
         return f"{public_url}/bots/telegram/webhook/{token}"
 
-    def start_bot(self, token: str, agent_name: str, background: List[str],
-                  steps: List[str], output_instructions: List[str]):
+    def start_bot(
+        self, 
+        agent_id: str,
+        token: str,
+        agent_name: str, 
+        background: List[str],
+        steps: List[str], 
+        output_instructions: List[str],
+        llm_api_key: str,
+        ):
         if token in self.bot_registry and self.bot_registry[token] is not None:
             raise HTTPException(
                 status_code=400,
@@ -123,14 +142,17 @@ class BotManager:
                 agent_name,
                 background,
                 steps,
-                output_instructions
+                output_instructions,
+                llm_api_key
             )
             self.bot_registry[token] = bot_instance
             self.bot_configs[token] = {
+                "agent_id": agent_id,
                 "agent_name": agent_name,
                 "background": background,
                 "steps": steps,
                 "output_instructions": output_instructions,
+                "llm_api_key": llm_api_key,
             }
             self._save_registry(True)
             webhook_url = self.get_webhook_url(token)
@@ -141,7 +163,9 @@ class BotManager:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    def stop_bot(self, token: str):
+    def stop_bot(self, agent_id: str):
+        bot = self.collection.find_one({"agent_id": agent_id})
+        token = bot.get("token")
         if token not in self.bot_registry or self.bot_registry[token] is None:
             raise HTTPException(status_code=404, detail="Bot not found.")
         try:
@@ -157,6 +181,15 @@ class BotManager:
     def list_bots(self):
         return {"running_bots": list(self.bot_configs.keys())}
 
+    def get_bot(self, agent_id: str):
+        bot = self.collection.find_one({"agent_id": agent_id})
+        token = bot.get("token")
+        running_bots = bot_manager.list_bots()
+        if token in running_bots["running_bots"]:
+            return {"running": True}
+        else:
+            return {"running": False}
+
     def get_bot_instance(self, token: str) -> TelegramAgentBot:
         if token not in self.bot_configs:
             raise HTTPException(
@@ -170,6 +203,7 @@ class BotManager:
                 config["background"],
                 config["steps"],
                 config["output_instructions"],
+                config["llm_api_key"],
             )
         return self.bot_registry[token]
 
@@ -177,20 +211,22 @@ class BotManager:
 bot_manager = BotManager()
 
 
-@app.post("/bots/telegram/start_bot/{token}")
-def start_bot(token: str, req: BotStartRequest):
+@app.post("/bots/telegram/start_bot/{agent_id}")
+def start_bot(agent_id: str, req: BotStartRequest):
     return bot_manager.start_bot(
-        token,
+        agent_id,
+        token=req.token,
         agent_name=req.agent_name,
         background=req.background,
         steps=req.steps,
-        output_instructions=req.output_instructions
+        output_instructions=req.output_instructions,
+        llm_api_key=req.llm_api_key
     )
 
 
-@app.post("/bots/telegram/stop_bot/{token}")
-def stop_bot(token: str):
-    return bot_manager.stop_bot(token)
+@app.post("/bots/telegram/stop_bot/{agent_id}")
+def stop_bot(agent_id: str):
+    return bot_manager.stop_bot(agent_id)
 
 
 @app.get("/bots/telegram/list_bots")
@@ -198,13 +234,9 @@ def list_bots():
     return bot_manager.list_bots()
 
 
-@app.get("/bots/telegram/get_bot_status/{token}")
-def bot_status(token: str):
-    running_bots = bot_manager.list_bots()
-    if token in running_bots["running_bots"]:
-        return {"running": True}
-    else:
-        return {"running": False}
+@app.get("/bots/telegram/get_bot_status/{agent_id}")
+def bot_status(agent_id: str):
+    return bot_manager.get_bot(agent_id)
 
 
 @app.post("/bots/telegram/webhook/{token}")
@@ -216,12 +248,16 @@ async def telegram_webhook(token: str, request: Request):
     if chat_id:
         bot_id = bot_manager.bot_configs[token].get("bot_id")
         if bot_id:
+            data = {
+                "bot_id": bot_id,
+                "telegram_user_id": chat_id,
+            }
+            user = bot_manager.users_collection.find_one({"bot_id": bot_id, "telegram_user_id": chat_id})
+            if user is None or "telegram_user_id" not in user:
+                data["encryption_key"] = generate_user_encryption_key().decode()
             bot_manager.users_collection.update_one(
                 {"bot_id": bot_id, "telegram_user_id": chat_id},
-                {"$set": {
-                    "bot_id": bot_id,
-                    "telegram_user_id": chat_id
-                }},
+                {"$set": data},
                 upsert=True
             )
     bot_instance = bot_manager.get_bot_instance(token)
