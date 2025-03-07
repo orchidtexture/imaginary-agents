@@ -1,11 +1,7 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException
 from typing import Dict, List
-from imaginary_agents.helpers.encription_helper import generate_user_encryption_key
-from pydantic import BaseModel
-
 
 from imaginary_agents.tg_bots.bot import TelegramAgentBot
 from imaginary_agents.tg_bots.db import (
@@ -17,30 +13,6 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-app = FastAPI(
-    title="Imaginary Agents Bot API",
-    description="API for interacting with various AI agent Bots",
-    version="1.0.0"
-)
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-class BotStartRequest(BaseModel):
-    # agent_id: str
-    token: str
-    llm_api_key: str
-    agent_name: str
-    background: List[str]
-    steps: List[str]
-    output_instructions: List[str]
 
 
 class BotManager:
@@ -65,7 +37,6 @@ class BotManager:
                     steps = doc.get("steps")
                     output_instructions = doc.get("output_instructions")
                     llm_api_key = doc.get("llm_api_key")
-                    print(llm_api_key)
                     self.bot_configs[token] = {
                         "agent_id": agent_id,
                         "agent_name": agent_name,
@@ -119,7 +90,7 @@ class BotManager:
         public_url = os.getenv("PUBLIC_URL")
         if not public_url:
             raise ValueError("PUBLIC_URL must be set in .env file")
-        return f"{public_url}/bots/telegram/webhook/{token}"
+        return f"{public_url}/api/v1/bots/telegram/webhook/{token}"
 
     def start_bot(
         self, 
@@ -209,74 +180,3 @@ class BotManager:
 
 
 bot_manager = BotManager()
-
-
-@app.post("/bots/telegram/start_bot/{agent_id}")
-def start_bot(agent_id: str, req: BotStartRequest):
-    return bot_manager.start_bot(
-        agent_id,
-        token=req.token,
-        agent_name=req.agent_name,
-        background=req.background,
-        steps=req.steps,
-        output_instructions=req.output_instructions,
-        llm_api_key=req.llm_api_key
-    )
-
-
-@app.post("/bots/telegram/stop_bot/{agent_id}")
-def stop_bot(agent_id: str):
-    return bot_manager.stop_bot(agent_id)
-
-
-@app.get("/bots/telegram/list_bots")
-def list_bots():
-    return bot_manager.list_bots()
-
-
-@app.get("/bots/telegram/get_bot_status/{agent_id}")
-def bot_status(agent_id: str):
-    return bot_manager.get_bot(agent_id)
-
-
-@app.post("/bots/telegram/webhook/{token}")
-async def telegram_webhook(token: str, request: Request):
-    if token not in bot_manager.bot_configs:
-        raise HTTPException(status_code=404, detail="Bot not found.")
-    update = await request.json()
-    chat_id = update.get("message", {}).get("chat", {}).get("id")
-    if chat_id:
-        bot_id = bot_manager.bot_configs[token].get("bot_id")
-        if bot_id:
-            data = {
-                "bot_id": bot_id,
-                "telegram_user_id": chat_id,
-            }
-            user = bot_manager.users_collection.find_one({"bot_id": bot_id, "telegram_user_id": chat_id})
-            if user is None or "telegram_user_id" not in user:
-                data["encryption_key"] = generate_user_encryption_key().decode()
-            bot_manager.users_collection.update_one(
-                {"bot_id": bot_id, "telegram_user_id": chat_id},
-                {"$set": data},
-                upsert=True
-            )
-    bot_instance = bot_manager.get_bot_instance(token)
-    bot_instance.process_webhook(update)
-    return {"status": "ok"}
-
-
-@app.get("/bots/telegram/bot_details/{token}")
-def bot_details(token: str):
-    if token not in bot_manager.bot_configs:
-        raise HTTPException(status_code=404, detail="Bot not found.")
-    bot_instance = bot_manager.get_bot_instance(token)
-    webhook_url = bot_manager.get_webhook_url(token)
-    return {
-        "token": token[:8],
-        "isRunning": True,  # If bot exists in bot_configs, it is running
-        "webhook_url": webhook_url,
-        "agent_name": bot_instance.agent_name,
-        "background": bot_instance.background,
-        "steps": bot_instance.steps,
-        "output_instructions": bot_instance.output_instructions,
-    }

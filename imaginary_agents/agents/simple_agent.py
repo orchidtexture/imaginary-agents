@@ -11,6 +11,8 @@ from atomic_agents.agents.base_agent import (
     BaseIOSchema
 )
 
+DEEPSEEK_API_URL = "https://api.deepseek.com"
+
 
 class SimpleAgent(BaseAgent):
     """Simple Agent that receives input instructions and returns an output."""
@@ -23,7 +25,8 @@ class SimpleAgent(BaseAgent):
         steps: List[str],
         output_instructions: List[str],
         api_key: str = None,
-        model: str = "gpt-4"
+        llm_provider: str = "deepseek",
+        model: str = "deepseek-chat"
     ):
         """
         Initialize the SimpleAgent with dynamic schema definitions.
@@ -66,8 +69,18 @@ class SimpleAgent(BaseAgent):
             }
         )
 
-        # Create OpenAI client
-        client = instructor.from_openai(openai.OpenAI(api_key=self.api_key))
+        if llm_provider == "deepseek":  # TODO: make multi provider dinamically
+            # Create Deepseek client
+            client = instructor.from_openai(
+                openai.OpenAI(
+                    api_key=api_key,
+                    base_url=DEEPSEEK_API_URL,
+                ),
+                mode=instructor.Mode.MD_JSON
+            )
+        else:
+            # Create OpenAI client
+            client = instructor.from_openai(openai.OpenAI(api_key=api_key))
 
         # Create agent config
         config = BaseAgentConfig(
