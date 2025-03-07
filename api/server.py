@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import agents, tg_bots
+from api.routes import agents, tg_bots, crawler_agent
 from imaginary_agents.tg_bots.bot_manager import bot_manager
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ app.add_middleware(
 # Include routers
 app.include_router(agents.router, prefix="/api/v1")
 app.include_router(tg_bots.router, prefix="/api/v1")
+app.include_router(crawler_agent.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
