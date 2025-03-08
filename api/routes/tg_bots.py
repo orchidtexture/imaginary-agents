@@ -20,6 +20,8 @@ class BotStartRequest(BaseModel):
     background: List[str]
     steps: List[str]
     output_instructions: List[str]
+    llm_provider: str
+    model: str
 
 
 @router.post("/start_bot/{agent_id}")
@@ -31,7 +33,9 @@ def start_bot(agent_id: str, req: BotStartRequest):
         background=req.background,
         steps=req.steps,
         output_instructions=req.output_instructions,
-        llm_api_key=req.llm_api_key
+        llm_api_key=req.llm_api_key,
+        llm_provider=req.llm_provider,
+        model=req.model,
     )
 
 

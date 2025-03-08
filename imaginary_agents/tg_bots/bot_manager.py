@@ -30,20 +30,23 @@ class BotManager:
                 if doc["isRunning"] is True:
                     # print(doc)
                     token = doc["token"]
-                    bot_id = doc["_id"]
                     agent_id = doc["agent_id"]
                     agent_name = doc.get("agent_name")
                     background = doc.get("background")
                     steps = doc.get("steps")
                     output_instructions = doc.get("output_instructions")
                     llm_api_key = doc.get("llm_api_key")
+                    llm_provider = doc.get("llm_provider")
+                    model = doc.get("model")
                     self.bot_configs[token] = {
                         "agent_id": agent_id,
                         "agent_name": agent_name,
                         "background": background,
                         "steps": steps,
                         "output_instructions": output_instructions,
-                        "llm_api_key": llm_api_key
+                        "llm_api_key": llm_api_key,
+                        "llm_provider": llm_provider,
+                        "model": model
                     }
                     bot_instance = self.get_bot_instance(token)
                     self.bot_registry[token] = bot_instance
@@ -68,6 +71,8 @@ class BotManager:
                     "steps": config["steps"],
                     "output_instructions": config["output_instructions"],
                     "llm_api_key": config["llm_api_key"],
+                    "llm_provider": config["llm_provider"],
+                    "model": config["model"],
                     "isRunning": isRunning
                 }
                 logger.info("Saving bot configuration to MongoDB: %s", data)
@@ -93,15 +98,17 @@ class BotManager:
         return f"{public_url}/api/v1/bots/telegram/webhook/{token}"
 
     def start_bot(
-        self, 
+        self,
         agent_id: str,
         token: str,
-        agent_name: str, 
+        agent_name: str,
         background: List[str],
-        steps: List[str], 
+        steps: List[str],
         output_instructions: List[str],
         llm_api_key: str,
-        ):
+        llm_provider: str,
+        model: str
+    ):
         if token in self.bot_registry and self.bot_registry[token] is not None:
             raise HTTPException(
                 status_code=400,
@@ -114,7 +121,9 @@ class BotManager:
                 background,
                 steps,
                 output_instructions,
-                llm_api_key
+                llm_api_key,
+                llm_provider,
+                model
             )
             self.bot_registry[token] = bot_instance
             self.bot_configs[token] = {
@@ -124,6 +133,8 @@ class BotManager:
                 "steps": steps,
                 "output_instructions": output_instructions,
                 "llm_api_key": llm_api_key,
+                "llm_provider": llm_provider,
+                "model": model
             }
             self._save_registry(True)
             webhook_url = self.get_webhook_url(token)
@@ -154,6 +165,11 @@ class BotManager:
 
     def get_bot(self, agent_id: str):
         bot = self.collection.find_one({"agent_id": agent_id})
+        if (bot is None):
+            raise HTTPException(
+                status_code=404,
+                detail=str("Bot not found.")
+            )
         token = bot.get("token")
         running_bots = bot_manager.list_bots()
         if token in running_bots["running_bots"]:
@@ -175,6 +191,8 @@ class BotManager:
                 config["steps"],
                 config["output_instructions"],
                 config["llm_api_key"],
+                config["llm_provider"],
+                config["model"]
             )
         return self.bot_registry[token]
 

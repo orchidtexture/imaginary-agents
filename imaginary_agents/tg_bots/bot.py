@@ -1,5 +1,4 @@
 import logging
-from imaginary_agents.helpers.encription_helper import decrypt_secret, encrypt_secret
 import telebot
 from typing import List
 from .commands import register_commands
@@ -7,6 +6,7 @@ from .utils.process_AI_agent_response import (
     process_AI_agent_response,
     agent_memory_update
 )
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,7 +20,9 @@ class TelegramAgentBot:
         background: List[str],
         steps: List[str],
         output_instructions: List[str],
-        llm_api_key: str
+        llm_api_key: str,
+        llm_provider: str,
+        model: str
     ):
         self.token = token
         self.agent_name = agent_name
@@ -28,6 +30,8 @@ class TelegramAgentBot:
         self.steps = steps
         self.output_instructions = output_instructions
         self.llm_api_key = llm_api_key
+        self.llm_provider = llm_provider
+        self.model = model
         self.bot = telebot.TeleBot(self.token)
         self.register_handlers()
 
@@ -65,7 +69,7 @@ class TelegramAgentBot:
             else:
                 logger.error(f"Failed to set webhook for {webhook_url}")
         except Exception as e:
-                logger.error(f"Error setting webhook: {e}")
+            logger.error(f"Error setting webhook: {e}")
 
     def remove_webhook(self):
         self.bot.remove_webhook()
