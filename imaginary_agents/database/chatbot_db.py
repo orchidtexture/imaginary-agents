@@ -4,6 +4,7 @@ import hashlib
 import base64
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
+from imaginary_agents.helpers.encription_helper import decrypt_secret, encrypt_secret
 from pymongo import MongoClient
 from pymongo.collection import ObjectId
 from pymongo.errors import DuplicateKeyError
@@ -51,9 +52,11 @@ class ChatBotDBManager:
     def register_user(self, api_key: str):
         """Registers a platform user with unique API key."""
         try:
+            encryption_key = Fernet.generate_key()
             user_entry = {
                 "api_key": api_key,
-                "chatbot_ids": []
+                "chatbot_ids": [],
+                'encryption_key': encryption_key.decode()
             }
             result = self.users_collection.insert_one(user_entry)
             return result.inserted_id  # Return new user _id
@@ -128,7 +131,10 @@ class ChatBotDBManager:
 
     def store_user_memory(self, telegram_user_id: int, memory_dump: dict):
         """Stores or updates a user's memory."""
+        key = self.get_user_encryption_key(telegram_user_id)
+        if key is None: return None
         memory_json = json.dumps(memory_dump)  # Convert to string
+        memory_json = encrypt_secret(key, memory_json)
         self.chatbot_users_collection.update_one(
             {"telegram_user_id": telegram_user_id},
             {"$set": {"bot_memories": memory_json}},
@@ -139,11 +145,24 @@ class ChatBotDBManager:
         """Retrieves user memory."""
         user = self.chatbot_users_collection.find_one(
             {"telegram_user_id": telegram_user_id},
-            {"bot_memories"}
+            {"bot_memories", "encryption_key"}
         )
+        key = user["encryption_key"]
+        memories = user["bot_memories"]
+        bot_memories = decrypt_secret(key, memories)
         return json.loads(
-            user["bot_memories"]
+            # user["bot_memories"]
+            bot_memories
         ) if user and user["bot_memories"] else None
+    
+    def get_user_encryption_key(self, telegram_user_id: int):
+        """Retrieves user memory."""
+        user = self.chatbot_users_collection.find_one(
+            {"telegram_user_id": telegram_user_id},
+            {"encryption_key"}
+        )
+        key = user["encryption_key"]
+        return key if user and user["encryption_key"] else None
 
     def close_connection(self):
         """Closes the MongoDB connection."""
