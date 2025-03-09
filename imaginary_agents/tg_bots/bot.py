@@ -7,7 +7,6 @@ from .utils.process_AI_agent_response import (
     agent_memory_update
 )
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -19,19 +18,13 @@ class TelegramAgentBot:
         agent_name: str,
         background: List[str],
         steps: List[str],
-        output_instructions: List[str],
-        llm_api_key: str,
-        llm_provider: str,
-        model: str
+        output_instructions: List[str]
     ):
         self.token = token
         self.agent_name = agent_name
         self.background = background
         self.steps = steps
         self.output_instructions = output_instructions
-        self.llm_api_key = llm_api_key
-        self.llm_provider = llm_provider
-        self.model = model
         self.bot = telebot.TeleBot(self.token)
         self.register_handlers()
 
@@ -61,15 +54,12 @@ class TelegramAgentBot:
                 logger.error(f"Error processing message: {e}")
 
     def set_webhook(self, webhook_url: str):
-        try:
-            self.bot.remove_webhook()
-            success = self.bot.set_webhook(webhook_url)
-            if success:
-                logger.info(f"Webhook set for bot: {webhook_url}")
-            else:
-                logger.error(f"Failed to set webhook for {webhook_url}")
-        except Exception as e:
-            logger.error(f"Error setting webhook: {e}")
+        self.bot.remove_webhook()
+        success = self.bot.set_webhook(webhook_url)
+        if success:
+            logger.info(f"Webhook set for bot: {webhook_url}")
+        else:
+            logger.error(f"Failed to set webhook for {webhook_url}")
 
     def remove_webhook(self):
         self.bot.remove_webhook()
