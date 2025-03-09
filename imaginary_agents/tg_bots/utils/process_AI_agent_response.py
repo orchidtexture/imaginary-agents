@@ -1,4 +1,9 @@
+import json
 import os
+from imaginary_agents.helpers.encription_helper import (
+    decrypt_secret,
+    encrypt_secret
+)
 import telebot
 from imaginary_agents.agents.chatbot_agent import ChatbotAgent
 from dotenv import load_dotenv
@@ -13,7 +18,7 @@ from atomic_agents.agents.base_agent import (
 
 load_dotenv()
 
-LLM_API_KEY = os.getenv("LLM_API_KEY")
+DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL")
 
 
 def process_AI_agent_response(bot: telebot.TeleBot, chat_id, user_message):
@@ -46,7 +51,9 @@ def process_AI_agent_response(bot: telebot.TeleBot, chat_id, user_message):
         background=bot.background,
         steps=bot.steps,
         output_instructions=bot.output_instructions,
-        llm_api_key=LLM_API_KEY
+        llm_api_key=bot.llm_api_key,
+        llm_provider=bot.llm_provider,
+        model=bot.model
     )
 
     # Run AI agent
@@ -83,9 +90,12 @@ def retrieve_agent_memory(user_agent: ChatbotAgent, chat_id, bot_id):
         "bot_id": bot_id,
         "telegram_user_id": chat_id
     })
-    bot_memory = record.get("bot_memory")
-
-    return bot_memory
+    key = record.get("encryption_key")
+    memory = record.get("bot_memory")
+    if memory is None:
+        return None
+    bot_memories = decrypt_secret(key, memory)
+    return json.loads(bot_memories)
 
 
 def agent_memory_update(user_agent: ChatbotAgent, chat_id, bot_id):
@@ -94,12 +104,29 @@ def agent_memory_update(user_agent: ChatbotAgent, chat_id, bot_id):
     # Store updated memory
     memory_dump = user_agent.memory.dump()
 
+    # Gets user's key and encrypts the memory
+    key = get_user_key(user_agent, chat_id, bot_id)
+    json_str = json.dumps(memory_dump)
+    memory = encrypt_secret(key, json_str)
+
     # Update the bot_memory in the database for this user
     bot_users_collection.update_one(
         {"bot_id": bot_id, "telegram_user_id": chat_id},
-        {"$set": {"bot_memory": memory_dump}},
+        {"$set": {"bot_memory": memory}},
         upsert=True
     )
 
     # # Reset agent memory for future interactions
     # user_agent.memory = AgentMemory(max_messages=20)
+
+
+def get_user_key(user_agent: ChatbotAgent, chat_id, bot_id):
+    """Gets the user's key in the database."""
+
+    # Gets user encryption key
+    user = bot_users_collection.find_one(
+        {"bot_id": bot_id, "telegram_user_id": chat_id},
+        {"encryption_key"}
+    )
+    key = user["encryption_key"]
+    return key if user and user["encryption_key"] else None
