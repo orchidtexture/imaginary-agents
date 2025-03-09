@@ -1,4 +1,3 @@
-import os
 import instructor
 import openai
 from pydantic import Field, create_model
@@ -12,11 +11,7 @@ from atomic_agents.agents.base_agent import (
     BaseIOSchema
 )
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL")
+DEEPSEEK_API_URL = "https://api.deepseek.com"
 
 
 class SimpleAgent(BaseAgent):
@@ -29,9 +24,9 @@ class SimpleAgent(BaseAgent):
         background: List[str],
         steps: List[str],
         output_instructions: List[str],
-        llm_provider: str,
-        model: str,
         api_key: str = None,
+        llm_provider: str = "deepseek",
+        model: str = "deepseek-chat"
     ):
         """
         Initialize the SimpleAgent with dynamic schema definitions.
@@ -45,7 +40,6 @@ class SimpleAgent(BaseAgent):
             steps: List of steps the agent should follow
             output_instructions: List of instructions for output formatting
             api_key: OpenAI API key (defaults to env var)
-            llm_provider: LLM provider to use
             model: OpenAI model to use
         """
 
