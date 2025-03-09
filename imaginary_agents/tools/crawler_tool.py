@@ -20,22 +20,15 @@ class CrawlerToolInputSchema(BaseIOSchema):
     Returns a structured response fetched from the web.
     """
 
-    crawl_instruction: Optional[str] = Field(
-        None,
-        description="Crawling instruction."
-    )
-    website_url: str = Field(
-        description="URL of the website to crawl."
-    )
+    crawl_instruction: Optional[str] = Field(None, description="Crawling instruction.")
+    website_url: str = Field(description="URL of the website to crawl.")
     schema: Optional[str] = Field(
-        None, description="JSON schema for the crawling instruction."
+        None,
+        description="JSON schema for the crawling instruction."
     )
-    api_key: Optional[str] = Field(
-        None, description="API key for the LLM provider."
-    )
-    model: Optional[str] = Field(
-        None, description=""
-    )
+    api_key: Optional[str] = Field(None, description="API key for the LLM provider.")
+    model: Optional[str] = Field(None, description="")
+    config: dict = Field(description="Configuration for the crawler.")
 
     # response_format: Literal["json", "html"] = Field()...
 
@@ -46,7 +39,8 @@ class CrawlerToolInputSchema(BaseIOSchema):
 class CrawlerToolOutputSchema(BaseIOSchema):
     """This schema represents the output of the crawling tool."""
 
-    result: str = Field(description="Crawling result as string.")  # Maybe here we can change the type to a more structured one depending on response_format
+    result: str = Field(description="Crawling result as string.")
+    # Maybe here we can change type to a more structured one depending on response_format
 
 
 class CrawlerTool(BaseTool):
@@ -70,7 +64,12 @@ class CrawlerTool(BaseTool):
     async def run_crawler(self, params):
         # Define the JSON schema (XPath version)
 
-        schema_dict = json.loads(params.schema) if isinstance(params.schema, str) else params.schema
+        schema_dict = json.loads(
+            params.schema
+        ) if isinstance(
+            params.schema,
+            str
+        ) else params.schema
 
         extraction_strategy = JsonCssExtractionStrategy(
             schema_dict,
@@ -78,26 +77,23 @@ class CrawlerTool(BaseTool):
         )
 
         # Place the strategy in the CrawlerRunConfig
-        config = CrawlerRunConfig(
-            # e.g., pass js_code or wait_for if the page is dynamic
-            # wait_for="css:.crypto-row:nth-child(20)"
-            cache_mode=CacheMode.BYPASS,
-            extraction_strategy=extraction_strategy,
-        )
+        config_kwargs = {
+            "extraction_strategy": extraction_strategy,
+            "cache_mode": CacheMode.BYPASS,
+        }
 
-        config = CrawlerRunConfig(
-            js_code="document.querySelector('button.truncated-text-wiz__absolute-button').click()",
-            wait_for="""
-            js:() => {
-                const linksSection = document.querySelector('#links-section');
-                return !!(linksSection && linksSection.textContent.trim() !== '');
-            }
-            """,
-            simulate_user=True,
-            magic=True,
-            cache_mode=CacheMode.BYPASS,
-            extraction_strategy=extraction_strategy,
-        )
+        # Dynamically add parameters from config_values if they have valid values
+        for key, value in params.config.items():
+            # Skip the extraction_strategy as we've already added it
+            if key == "extraction_strategy" or key == "cache_mode":
+                continue
+
+            # Only add non-None and non-empty values
+            if value is not None and (not isinstance(value, str) or value.strip()):
+                config_kwargs[key] = value
+
+        # Create the config with dynamic parameters
+        config = CrawlerRunConfig(**config_kwargs)
 
         async with AsyncWebCrawler(verbose=True) as crawler:
             result = await crawler.arun(
@@ -119,13 +115,16 @@ class CrawlerTool(BaseTool):
         """
         Runs the CrawlerTool synchronously with the given parameters.
 
-        This method creates an event loop in a separate thread to run the asynchronous operations.
+        This method creates an event loop in a separate thread to run 
+        the asynchronous operations.
 
         Args:
-            params (CrawlerToolInputSchema): The input parameters for the tool, adhering to the input schema.
+            params (CrawlerToolInputSchema):
+                The input parameters for the tool, adhering to the input schema.
 
         Returns:
-            CrawlerToolOutputSchema: The output of the tool, adhering to the output schema.
+            CrawlerToolOutputSchema:
+                The output of the tool, adhering to the output schema.
 
         Raises:
             ValueError: If the base URL is not provided.
