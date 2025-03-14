@@ -2,10 +2,10 @@ import json
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from typing import Optional
-from pydantic import Field
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
-from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
+from typing import Dict, Any, Optional
+from pydantic import Field, BaseModel, create_model
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, LLMConfig
+from crawl4ai.extraction_strategy import JsonCssExtractionStrategy, LLMExtractionStrategy
 
 from atomic_agents.agents.base_agent import BaseIOSchema
 from atomic_agents.lib.base.base_tool import BaseTool
@@ -27,8 +27,17 @@ class CrawlerToolInputSchema(BaseIOSchema):
         description="JSON schema for the crawling instruction."
     )
     api_key: Optional[str] = Field(None, description="API key for the LLM provider.")
-    model: Optional[str] = Field(None, description="")
-    config: dict = Field(description="Configuration for the crawler.")
+    config: Optional[dict] = Field(description="Configuration for the crawler.")
+    llm_provider: Optional[str] = Field(
+        description="LLM provider to use for extraction."
+    )
+    llm_model: Optional[str] = Field(None, description="LLM model to use.")
+    llm_extraction_schema: Optional[Dict[str, Dict[str, Any]]] = Field(
+        description="LLM extraction schema fields."
+    )
+    llm_extraction_extra_args: Optional[Dict[str, Any]] = Field(
+        description="Extra arguments for LLM extraction."
+    )
 
     # response_format: Literal["json", "html"] = Field()...
 
@@ -64,17 +73,50 @@ class CrawlerTool(BaseTool):
     async def run_crawler(self, params):
         # Define the JSON schema (XPath version)
 
-        schema_dict = json.loads(
-            params.schema
-        ) if isinstance(
-            params.schema,
-            str
-        ) else params.schema
+        if params.schema:
+            schema_dict = json.loads(
+                params.schema
+            ) if isinstance(
+                params.schema,
+                str
+            ) else params.schema
 
-        extraction_strategy = JsonCssExtractionStrategy(
-            schema_dict,
-            verbose=True
-        )
+            extraction_strategy = JsonCssExtractionStrategy(
+                schema_dict,
+                verbose=True
+            )
+        else:
+            # Create dynamic schema
+            LlmExtractionSchema = create_model(
+                'LlmExtractionSchema',
+                __base__=BaseModel,
+                __doc__="LLM extraction schema.",
+                **{
+                    name: (field_def['type'], Field(
+                        ...,
+                        description=field_def['description']
+                    ))
+                    for name, field_def in params.llm_extraction_schema.items()
+                }
+            )
+
+            # Rebuild the model to fully define it
+            LlmExtractionSchema.model_rebuild()
+
+            provider = f"{params.llm_provider}/{params.llm_model}"
+            print(f"Using provider: {provider}")
+            print("api_key:", params.api_key)
+
+            extraction_strategy = LLMExtractionStrategy(
+                llm_config=LLMConfig(
+                    provider=provider,
+                    api_token=params.api_key
+                ),
+                schema=LlmExtractionSchema.model_json_schema(),
+                extraction_type="schema",
+                instruction=params.crawl_instruction,
+                extra_args=params.llm_extraction_extra_args,
+            )
 
         # Place the strategy in the CrawlerRunConfig
         config_kwargs = {
@@ -98,7 +140,6 @@ class CrawlerTool(BaseTool):
         async with AsyncWebCrawler(verbose=True) as crawler:
             result = await crawler.arun(
                 url=params.website_url,
-
                 config=config
             )
 
