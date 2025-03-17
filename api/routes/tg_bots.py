@@ -67,7 +67,12 @@ async def telegram_webhook(token: str, request: Request):
                 "bot_id": bot_id,
                 "telegram_user_id": chat_id,
             }
-            user = bot_manager.users_collection.find_one({"bot_id": bot_id, "telegram_user_id": chat_id})
+            user = bot_manager.users_collection.find_one(
+                {
+                    "bot_id": bot_id,
+                    "telegram_user_id": chat_id
+                }
+            )
             if user is None or "telegram_user_id" not in user:
                 data["encryption_key"] = generate_user_encryption_key().decode()
             bot_manager.users_collection.update_one(
