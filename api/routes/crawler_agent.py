@@ -39,6 +39,7 @@ class ToolRunRequest(BaseModel):
     llm_model: Optional[str] = None,
     llm_extraction_schema: Optional[Dict[str, SchemaField]] = None
     llm_extraction_extra_args: Optional[dict] = {}
+    local_crawling: Optional[bool] = False
 
 
 @router.post("/run")
@@ -76,7 +77,8 @@ async def run_tool(config: ToolRunRequest):
                         llm_provider=config.llm_provider,
                         llm_model=config.llm_model,
                         llm_extraction_schema=processed_schema,
-                        llm_extraction_extra_args=config.llm_extraction_extra_args
+                        llm_extraction_extra_args=config.llm_extraction_extra_args,
+                        local_crawling=config.local_crawling
                     )
                     response = crawler_tool.run(crawler_input)
                     if response is not None:
@@ -94,7 +96,8 @@ async def run_tool(config: ToolRunRequest):
                 crawler_input = CrawlerTool.input_schema(
                     schema=config.schema,
                     website_url=config.website_url,
-                    config=config.crawler_config
+                    config=config.crawler_config,
+                    local_crawling=config.local_crawling
                 )
                 response = crawler_tool.run(crawler_input)
                 return response

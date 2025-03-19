@@ -1,14 +1,21 @@
+import os
 import json
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 from typing import Dict, Any, Optional
 from pydantic import Field, BaseModel, create_model
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, LLMConfig
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, LLMConfig, BrowserConfig
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy, LLMExtractionStrategy
 
 from atomic_agents.agents.base_agent import BaseIOSchema
 from atomic_agents.lib.base.base_tool import BaseTool
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 
 
 ################
@@ -29,14 +36,21 @@ class CrawlerToolInputSchema(BaseIOSchema):
     api_key: Optional[str] = Field(None, description="API key for the LLM provider.")
     config: Optional[dict] = Field(description="Configuration for the crawler.")
     llm_provider: Optional[str] = Field(
+        None,
         description="LLM provider to use for extraction."
     )
     llm_model: Optional[str] = Field(None, description="LLM model to use.")
     llm_extraction_schema: Optional[Dict[str, Dict[str, Any]]] = Field(
+        None,
         description="LLM extraction schema fields."
     )
     llm_extraction_extra_args: Optional[Dict[str, Any]] = Field(
+        None,
         description="Extra arguments for LLM extraction."
+    )
+    local_crawling: Optional[bool] = Field(
+        False,
+        description="Whether to use local browser or Steel for crawling."
     )
 
     # response_format: Literal["json", "html"] = Field()...
@@ -118,6 +132,25 @@ class CrawlerTool(BaseTool):
                 extra_args=params.llm_extraction_extra_args,
             )
 
+        if params.local_crawling:
+            # Using local browser for the crawler
+            browser_config = BrowserConfig(
+                headless=True,
+                verbose=True,
+                browser_type="chromium"
+            )
+        else:
+            # Using steel.dev for the browser
+            cdp_url = f"wss://connect.steel.dev?apiKey={STEEL_API_KEY}"
+
+            browser_config = BrowserConfig(
+                headless=True,
+                verbose=True,
+                use_managed_browser=True,
+                browser_type="chromium",
+                cdp_url=cdp_url
+            )
+
         # Place the strategy in the CrawlerRunConfig
         config_kwargs = {
             "extraction_strategy": extraction_strategy,
@@ -137,7 +170,7 @@ class CrawlerTool(BaseTool):
         # Create the config with dynamic parameters
         config = CrawlerRunConfig(**config_kwargs)
 
-        async with AsyncWebCrawler(verbose=True) as crawler:
+        async with AsyncWebCrawler(config=browser_config) as crawler:
             result = await crawler.arun(
                 url=params.website_url,
                 config=config
