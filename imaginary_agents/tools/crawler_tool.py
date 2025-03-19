@@ -5,7 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from typing import Dict, Any, Optional
 from pydantic import Field, BaseModel, create_model
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, LLMConfig, BrowserConfig
+from crawl4ai import (
+    AsyncWebCrawler,
+    CrawlerRunConfig,
+    CacheMode,
+    LLMConfig,
+    BrowserConfig
+)
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy, LLMExtractionStrategy
 
 from atomic_agents.agents.base_agent import BaseIOSchema
@@ -189,7 +195,7 @@ class CrawlerTool(BaseTool):
         """
         Runs the CrawlerTool synchronously with the given parameters.
 
-        This method creates an event loop in a separate thread to run 
+        This method creates an event loop in a separate thread to run
         the asynchronous operations.
 
         Args:

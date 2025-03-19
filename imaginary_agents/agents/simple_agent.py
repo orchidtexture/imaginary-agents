@@ -53,7 +53,7 @@ class SimpleAgent(BaseAgent):
         SimpleAgentInputSchema = create_model(
             'SimpleAgentInputSchema',
             __base__=BaseIOSchema,
-            __doc__="Input schema for the SimpleAgent that defines the expected input structure.",
+            __doc__="Input schema for SimpleAgent, defines expected input structure.",
             **{
                 name: (field_def['type'], Field(
                     ...,
@@ -66,7 +66,7 @@ class SimpleAgent(BaseAgent):
         SimpleAgentOutputSchema = create_model(
             'SimpleAgentOutputSchema',
             __base__=BaseIOSchema,
-            __doc__="Output schema for the SimpleAgent that defines the response structure.",
+            __doc__="Output schema for SimpleAgent that defines the response structure.",
             **{
                 name: (field_def['type'], Field(
                     ..., description=field_def['description']
