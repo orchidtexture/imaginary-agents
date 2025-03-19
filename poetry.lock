@@ -3042,6 +3042,26 @@ anyio = ">=3.6.2,<5"
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
 [[package]]
+name = "steel-sdk"
+version = "0.1.0b11"
+description = "The official Python library for the steel API"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "steel_sdk-0.1.0b11-py3-none-any.whl", hash = "sha256:b026095ebb802f9c2e56040fbc3d571c0ba59ca21486221934978ed1719567f5"},
+    {file = "steel_sdk-0.1.0b11.tar.gz", hash = "sha256:113ad8fc00c0811f305bc028ffee7a4ea03376e586a709ff1ceb8ad31da8b459"},
+]
+
+[package.dependencies]
+anyio = ">=3.5.0,<5"
+distro = ">=1.7.0,<2"
+httpx = ">=0.23.0,<1"
+pydantic = ">=1.9.0,<3"
+sniffio = "*"
+typing-extensions = ">=4.10,<5"
+
+[[package]]
 name = "tenacity"
 version = "9.0.0"
 description = "Retry code until it succeeds"
@@ -3556,4 +3576,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "87be5f6e1b2bf9f01a2f3a3f9e70b2005aabe80bb61c308bb8b64172249b544b"
+content-hash = "33a2f247b864df4d1212b1d203315a4d63142469965ecc046f5521b454bf447a"

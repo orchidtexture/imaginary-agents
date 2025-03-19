@@ -21,6 +21,7 @@ dependencies = [
     "pytelegrambotapi (>=4.26.0,<5.0.0)",
     "cryptography (>=44.0.0,<45.0.0)",
     "crawl4ai (>=0.5.0.post4,<0.6.0)",
+    "steel-sdk (>=0.1.0b11,<0.2.0)",
 ]
 
 
