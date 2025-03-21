@@ -35,22 +35,24 @@ async def run_tool(config: ToolRunRequest):
         logger.info("Running browser-use tool")
 
         if config.local_browser:
-            browser_use_tool = BrowserUseTool(config=BrowserUseToolConfig())
+            browser_use_tool = BrowserUseTool(config=BrowserUseToolConfig(
+                llm_api_key=config.llm_api_key,
+                llm_provider=config.llm_provider,
+                llm_model=config.llm_model,
+            ))
         else:
             browser_use_tool = BrowserUseTool(
                 config=BrowserUseToolConfig(
                     STEEL_API_KEY=STEEL_API_KEY,
-                    STEEL_BASE_URL=STEEL_BASE_URL
+                    STEEL_BASE_URL=STEEL_BASE_URL,
+                    llm_api_key=config.llm_api_key,
+                    llm_provider=config.llm_provider,
+                    llm_model=config.llm_model,
                 )
             )
 
         try:
-            browser_use_input = BrowserUseTool.input_schema(
-                task=config.task,
-                llm_api_key=config.llm_api_key,
-                llm_provider=config.llm_provider,
-                llm_model=config.llm_model,
-            )
+            browser_use_input = BrowserUseTool.input_schema(task=config.task)
             response = browser_use_tool.run(browser_use_input)
             return response
         except Exception as e:

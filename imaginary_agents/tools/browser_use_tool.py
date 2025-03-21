@@ -22,9 +22,6 @@ class BrowserUseToolInputSchema(BaseIOSchema):
     """
 
     task: str = Field(description="Task for browser-use agent.")
-    llm_api_key: str = Field(description="API key for the LLM provider.")
-    llm_provider: str = Field(description="LLM provider to use for extraction.")
-    llm_model: str = Field(description="LLM model to use.")
 
 
 ####################
@@ -44,6 +41,9 @@ class BrowserUseToolConfig(BaseToolConfig):
 
     STEEL_API_KEY: Optional[str] = Field(None, description="steel.dev API key.")
     STEEL_BASE_URL: Optional[str] = Field(None, description="Base URL for Steel API.")
+    llm_api_key: str = Field(..., description="LLM API key.")
+    llm_provider: str = Field(..., description="LLM provider.")
+    llm_model: str = Field(..., description="LLM model.")
 
 
 class BrowserUseTool(BaseTool):
@@ -68,6 +68,9 @@ class BrowserUseTool(BaseTool):
         super().__init__(config)
         self.session = None
         self.steel_client = None
+        self.llm_api_key = config.llm_api_key
+        self.llm_provider = config.llm_provider
+        self.llm_model = config.llm_model
 
         if config.STEEL_API_KEY:
             # Initialize Steel client and create session
@@ -118,9 +121,9 @@ class BrowserUseTool(BaseTool):
         # https://docs.browser-use.com/customize/supported-models
         model = ChatOpenAI(
             # base_url=f"{DEEPSEEK_API_URL}/v1",
-            model=params.llm_model,
+            model=self.llm_model,
             temperature=0.3,
-            api_key=params.llm_api_key
+            api_key=self.llm_api_key
         )
 
         # Instantiate the agent
