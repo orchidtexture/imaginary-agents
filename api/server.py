@@ -14,7 +14,7 @@ from api.routes import (
 from imaginary_agents.tg_bots.bot_manager import bot_manager
 
 from config import init_db, close_db_connection
-from api.models import LLMConfig
+from api.models import LLMConfig, Agent
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     # You could add any additional startup logic here
     logger.info(f"Bot Manager object: {bot_manager}")
     logger.info("Bot Manager initialized and ready to serve requests")
-    await init_db([LLMConfig])
+    await init_db([LLMConfig, Agent])
     logger.info("Database initialized successfully")
     yield
     # Add any cleanup code here, if needed
