@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from database.database import retrieve_llm_configs, add_llm_config
 
@@ -23,15 +23,15 @@ class CreateLLMConfigRequest(BaseModel):
     )
 
     # Reuse the same example schema
-    model_config = {
-        "json_schema_extra": {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "model": "deepseek-chat",
                 "base_url": "https://api.deepseek.com",
                 "provider": "deepseek"
             }
         }
-    }
+    )
 
 
 @router.get("/list")

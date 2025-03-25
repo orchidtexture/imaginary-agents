@@ -35,7 +35,7 @@ async def test_retrieve_populated_llm_configs(
     assert "claude-3-opus" in config_names
 
 
-async def test_create_llm_config_succesfully(client_test: AsyncClient,):
+async def test_create_llm_config_succesfully(client_test: AsyncClient):
     """Test create new LLM Config succesfully"""
 
     new_config = {

@@ -1,69 +1,27 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, List
 import logging
-from imaginary_agents.agents.orchestrator import OrchestratorAgent
-from imaginary_agents import tools
+from typing import Optional, Dict, List
+from datetime import datetime
 
+# import instructor
+# import openai
 
-from api.models import Agent
-from database.database import add_agent
+from beanie import Document
+from pydantic import Field, ConfigDict
+from atomic_agents.agents.base_agent import BaseAgent
+# from atomic_agents.lib.components.system_prompt_generator import SystemPromptGenerator
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/agents/orchestrator", tags=["Gigachad Agents"])
 
-registered_tools = [  # TODO: assign dinamically perhaps from db
-    {
-        "tool": tools.BrowserUseTool,
-        "input_schema": tools.BrowserUseToolInputSchema,
-        "output_schema": tools.BrowserUseToolOutputSchema,
-    },
-    {
-        "tool": tools.CrawlerTool,
-        "input_schema": tools.CrawlerToolInputSchema,
-        "output_schema": tools.CrawlerToolOutputSchema,
-    }
-]
-
-
-class AgentRunRequest(BaseModel):
-    chat_message: str
-    agent_name: Optional[str] = None
-    llm_api_key: str
-    llm_provider: str
-    llm_model: str
-
-
-@router.post("/run")
-async def run_agent(config: AgentRunRequest):
-    try:
-        logger.info("Running orchestrator agent")
-
-        agent = OrchestratorAgent(
-            available_tools=registered_tools,  # This comes from db
-            api_key=config.llm_api_key,
-            llm_provider=config.llm_provider,
-            model=config.llm_model
-        )
-
-        agent_input = OrchestratorAgent.input_schema(chat_message=config.chat_message)
-
-        response = agent.run(agent_input)
-        return response.dict()
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class CreateAgentRequest(BaseModel):
-    """Request model for creating an Agent"""
-
+class Agent(Document):
+    """
+    MongoDB document model for storing agent configurations
+    Uses composition to create BaseAgent instances when needed
+    """
     name: str = Field(..., description="Name of the agent")
     llm_model: str = Field(..., description="The identifier of the model to use")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     background: Optional[List[str]] = Field(
         default=None,
         description="Background context for the agent"
@@ -76,6 +34,7 @@ class CreateAgentRequest(BaseModel):
         default=None,
         description="Instructions for output formatting"
     )
+    # Schema definitions (stored as metadata)
     input_schema_fields: Optional[Dict[str, Dict[str, str]]] = Field(
         default=None,
         description="Input schema field definitions"
@@ -88,6 +47,13 @@ class CreateAgentRequest(BaseModel):
         default=None,
         description="Telegram bot token if applicable"
     )
+    running: Optional[bool] = Field(
+        default=False,
+        description="Whether the agent is currently running"
+    )
+
+    # Non-persisted field for the agent instance (Beanie will ignore this)
+    _agent: Optional[BaseAgent] = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -125,19 +91,26 @@ class CreateAgentRequest(BaseModel):
         }
     )
 
+    def run_agent(self) -> BaseAgent:
+        """Run an atomic-agent instance based on Agent"""
+        if not self._agent:
+            # 1. Configure the client based on model
+            # Support models supported by atomic-agents
+            # According to model selected:
+            # # api_key comes from user config
+            # # base_url comes from LLMConfig
+            from database.database import retrieve_llm_config
+            llm_config = retrieve_llm_config(model=self.llm_model)
+            logger.info(llm_config)
+            # client = instructor.from_openai(
+            #     openai.OpenAI(api_key=self.llm_api_key, base_url=llm_config.base_url),
+            #     mode=instructor.Mode.MD_JSON
+            # )
+            # 2. Dynamically create input/output schemas if defined
+            # 3. Create system prompt generator
+            # 4. Create agent config
+            # 5. Create the agent instance
+        return self._agent
 
-@router.post("/create")
-async def create_agent(config: CreateAgentRequest):
-    """
-    Create a new Agent
-    :return: The newly created Agent
-    """
-    try:
-        # Convert request model to Agent and save it
-        # Model dump bc request model has same fields as Agent model
-        new_agent = Agent(**config.model_dump())
-        res = await add_agent(new_agent)
-        return res
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    class Settings:
+        name = "agents"
