@@ -6,7 +6,7 @@ from beanie import init_beanie
 
 from api.server import app
 
-from api.models import LLMConfig
+from api.models import LLMConfig, Agent
 from config.db import _client, _db
 
 
@@ -25,7 +25,7 @@ async def client_test():
 
 
 @pytest.fixture(autouse=True)
-async def mock_db_connection():
+async def mock_db_connection(scope="function"):
     """
     Replace the MongoDB connection with a mock for testing.
     This runs automatically for all tests.
@@ -81,3 +81,23 @@ async def sample_llm_configs():
         created_configs.append(created)
 
     yield created_configs
+
+
+@pytest.fixture
+async def sample_agent(scope="function"):
+    """Add sample Agent to the mock database."""
+    # Create and insert test data
+
+    sample_agent = Agent(
+        name="Test Daniel",
+        llm_model="deepseek-chat",
+        background=[
+            "You are a test agent",
+            "Your name is Mini Daniel",
+            "You help the user test the system"
+        ]
+    )
+
+    created_agent = await sample_agent.create()
+
+    yield created_agent

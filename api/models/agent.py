@@ -2,13 +2,17 @@ import logging
 from typing import Optional, Dict, List
 from datetime import datetime
 
-# import instructor
-# import openai
+import instructor
+import openai
 
 from beanie import Document
 from pydantic import Field, ConfigDict
-from atomic_agents.agents.base_agent import BaseAgent
-# from atomic_agents.lib.components.system_prompt_generator import SystemPromptGenerator
+from atomic_agents.agents.base_agent import (
+    BaseAgent,
+    BaseAgentConfig,
+    BaseAgentInputSchema
+)
+from atomic_agents.lib.components.system_prompt_generator import SystemPromptGenerator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,7 +95,7 @@ class Agent(Document):
         }
     )
 
-    def run_agent(self) -> BaseAgent:
+    async def run(self) -> BaseAgent:
         """Run an atomic-agent instance based on Agent"""
         if not self._agent:
             # 1. Configure the client based on model
@@ -99,17 +103,41 @@ class Agent(Document):
             # According to model selected:
             # # api_key comes from user config
             # # base_url comes from LLMConfig
-            from database.database import retrieve_llm_config
-            llm_config = retrieve_llm_config(model=self.llm_model)
-            logger.info(llm_config)
-            # client = instructor.from_openai(
-            #     openai.OpenAI(api_key=self.llm_api_key, base_url=llm_config.base_url),
-            #     mode=instructor.Mode.MD_JSON
-            # )
+            from database.database import retrieve_llm_config_by_model
+
+            llm_config = await retrieve_llm_config_by_model(model=self.llm_model)
+
+            client = instructor.from_openai(
+                openai.OpenAI(
+                    api_key="sk-4056c11fe1934fef9356edd0da7f4779",
+                    base_url=llm_config.base_url
+                ),
+                mode=instructor.Mode.MD_JSON
+            )
+            logger.info(f"Client: {client}")
             # 2. Dynamically create input/output schemas if defined
             # 3. Create system prompt generator
+            system_prompt_generator = SystemPromptGenerator(
+                background=self.background,
+                steps=self.steps,
+                output_instructions=self.output_instructions
+            )
             # 4. Create agent config
+            config = BaseAgentConfig(
+                client=client,
+                model=self.llm_model,
+                system_prompt_generator=system_prompt_generator,
+                # input_schema=SimpleAgentInputSchema,
+                # output_schema=SimpleAgentOutputSchema
+            )
+            logger.info(f"Config: {config}")
             # 5. Create the agent instance
+            self._agent = BaseAgent(config)
+            logger.info(f"Agent: {self._agent}")
+            agent_response = self._agent.run(
+                BaseAgentInputSchema(chat_message="Hello, what's your name?")
+            )
+            logger.info(f"Agent response: {agent_response.dict()}")
         return self._agent
 
     class Settings:

@@ -92,3 +92,12 @@ async def test_create_agent_succesfully(client_test: AsyncClient):
     #         break
 
     # assert new_agent_exists, "Newly created agent not found in the list"
+
+
+async def test_run_agent_succesfully(
+    client_test: AsyncClient,
+    sample_agent,
+    sample_llm_configs
+):
+    """Test running an Agent succesfully"""
+    logger.info(await sample_agent.run())
