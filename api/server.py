@@ -1,9 +1,12 @@
+import os
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from api.routes import (
+    users,
     agents,
     tg_bots,
     crawler_agent,
@@ -16,7 +19,16 @@ from imaginary_agents.tg_bots.bot_manager import bot_manager
 from config import init_db, close_db_connection
 from api.models import LLMConfig, Agent
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+FIEF_BASE_URL = os.getenv("FIEF_BASE_URL")
+FIEF_CLIENT_ID = os.getenv("FIEF_CLIENT_ID")
+FIEF_CLIENT_SECRET = os.getenv("FIEF_CLIENT_SECRET")
 
 
 @asynccontextmanager
@@ -25,8 +37,11 @@ async def lifespan(app: FastAPI):
     # You could add any additional startup logic here
     logger.info(f"Bot Manager object: {bot_manager}")
     logger.info("Bot Manager initialized and ready to serve requests")
+
+    # Initialize the database
     await init_db([LLMConfig, Agent])
     logger.info("Database initialized successfully")
+
     yield
     # Add any cleanup code here, if needed
     logger.info("Shutting down Bot Manager")
@@ -50,6 +65,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(users.router, prefix="/api/v1")
 app.include_router(agents.router, prefix="/api/v1")
 app.include_router(tg_bots.router, prefix="/api/v1")
 app.include_router(crawler_agent.router, prefix="/api/v1")
