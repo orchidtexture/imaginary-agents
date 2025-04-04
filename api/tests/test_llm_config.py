@@ -32,7 +32,7 @@ async def test_retrieve_populated_llm_configs(
     # Verify config data if needed
     config_names = [config["model"] for config in msg["llm_configs"]]
     assert "deepseek-chat" in config_names
-    assert "claude-3-opus" in config_names
+    assert "test_model" in config_names
 
 
 async def test_create_llm_config_succesfully(client_test: AsyncClient):

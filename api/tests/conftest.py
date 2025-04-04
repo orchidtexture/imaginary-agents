@@ -87,9 +87,9 @@ async def sample_llm_configs():
             provider="deepseek"
         ),
         LLMConfig(
-            model="claude-3-opus",
-            base_url="https://api.anthropic.com",
-            provider="https://api.anthropic.com"
+            model="test_model",
+            base_url="https://api.test.com",
+            provider="test_llm_provider"
         )
     ]
 
@@ -106,14 +106,26 @@ async def sample_agent(scope="function"):
     """Add sample Agent to the mock database."""
     # Create and insert test data
 
-    sample_agent = Agent(
+    sample_agent = Agent(  # TODO: add input and output schema
         name="Test Daniel",
-        llm_model="deepseek-chat",
+        llm_model="test_model",
         background=[
             "You are a test agent",
             "Your name is Mini Daniel",
             "You help the user test the system"
-        ]
+        ],
+        input_schema_fields={
+            "notes": {
+                "type": "str",
+                "description": "The notes from the technical meeting"
+            }
+        },
+        output_schema_fields={
+            "summary": {
+                "type": "str",
+                "description": "The summary of the technical meeting"
+            }
+        }
     )
 
     created_agent = await sample_agent.create()
@@ -128,16 +140,9 @@ async def sample_user(scope="function"):
 
     sample_user = User(
         email=mock_user["email"],
-        llm_api_keys=[
-            {
-                "provider": "openai",
-                "api_key": "sk-xxxxxxxxxxxxxxxxxxxx"
-            },
-            {
-                "provider": "anthropic",
-                "api_key": "sk-xxxxxxxxxxxxxxxxxxxx"
-            }
-        ]
+        llm_api_keys={
+            "test_llm_provider": "sk-xxxxxxxxxxxxxxxxxxxx",
+        }
     )
 
     created_user = await sample_user.create()

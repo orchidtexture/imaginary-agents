@@ -1,4 +1,5 @@
 import pytest
+from fastapi import status
 from httpx import AsyncClient
 
 import logging
@@ -94,10 +95,21 @@ async def test_create_agent_succesfully(client_test: AsyncClient):
     # assert new_agent_exists, "Newly created agent not found in the list"
 
 
-async def test_run_agent_succesfully(
+async def test_run_agent_with_wrong_input_fields(
     client_test: AsyncClient,
+    override_dependencies,
+    sample_user,
     sample_agent,
     sample_llm_configs
 ):
     """Test running an Agent succesfully"""
-    logger.info(await sample_agent.run())
+    response = await client_test.post(
+        "api/v1/agents/run",
+        json={
+            "id": str(sample_agent.id),
+            "input_fields": {
+                "some_field": "Wrong data"
+            }
+        }
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

@@ -85,7 +85,7 @@ async def fief_webhook(request: Request):
                 # Create new user in our database
                 new_user = User(
                     email=email,
-                    llm_api_keys=[]  # Empty by default
+                    llm_api_keys={}  # Empty by default
                 )
                 await add_user(new_user)
 

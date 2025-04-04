@@ -4,7 +4,6 @@ from typing import List, Union
 from api.models import LLMConfig, Agent, User
 
 llm_config_collection = LLMConfig
-user_collection = User
 
 ############################################
 # LLM Configurations
@@ -59,6 +58,11 @@ async def update_llm_config_data(
 
 async def add_agent(new_agent: Agent) -> Agent:
     agent = await new_agent.create()
+    return agent
+
+
+async def retrieve_agent(id: PydanticObjectId) -> Agent:
+    agent = await Agent.get(id)
     return agent
 
 ############################################
