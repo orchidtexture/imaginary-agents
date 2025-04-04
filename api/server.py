@@ -12,7 +12,8 @@ from api.routes import (
     crawler_agent,
     browser_use,
     orchestrator_agent,
-    llm_configs
+    llm_configs,
+    webhooks
 )
 from imaginary_agents.tg_bots.bot_manager import bot_manager
 
@@ -72,6 +73,7 @@ app.include_router(crawler_agent.router, prefix="/api/v1")
 app.include_router(browser_use.router, prefix="/api/v1")
 app.include_router(orchestrator_agent.router, prefix="/api/v1")
 app.include_router(llm_configs.router, prefix="/api/v1")
+app.include_router(webhooks.router, prefix="/api/v1")
 
 
 if __name__ == "__main__":
