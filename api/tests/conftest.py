@@ -5,9 +5,25 @@ from mongomock_motor import AsyncMongoMockClient
 from beanie import init_beanie
 
 from api.server import app
+from api.auth import current_user
 
-from api.models import LLMConfig, Agent
+from api.models import LLMConfig, Agent, User
 from config.db import _client, _db
+
+# Mock user to override auth
+mock_user = {
+    "sub": "test-sub-id",
+    "email": "test@example.com",
+    "tenant_id": "mock-tenant-id",
+    "fields": {"first_name": "Test", "last_name": "User"}
+}
+
+
+@pytest.fixture()
+def override_dependencies():
+    app.dependency_overrides[current_user] = lambda: mock_user
+    yield
+    app.dependency_overrides = {}
 
 
 @pytest.fixture()
@@ -47,6 +63,8 @@ async def mock_db_connection(scope="function"):
     # Initialize Beanie with the mock database
     document_models = [
         LLMConfig,
+        Agent,
+        User
         # Add other document models here
     ]
     await init_beanie(document_models=document_models, database=mock_db)
@@ -101,3 +119,27 @@ async def sample_agent(scope="function"):
     created_agent = await sample_agent.create()
 
     yield created_agent
+
+
+@pytest.fixture
+async def sample_user(scope="function"):
+    """Add sample User to the mock database."""
+    # Create and insert test data
+
+    sample_user = User(
+        email=mock_user["email"],
+        llm_api_keys=[
+            {
+                "provider": "openai",
+                "api_key": "sk-xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+                "provider": "anthropic",
+                "api_key": "sk-xxxxxxxxxxxxxxxxxxxx"
+            }
+        ]
+    )
+
+    created_user = await sample_user.create()
+
+    yield created_user

@@ -2,12 +2,10 @@ import os
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from fief_client import FiefAsync
 from fief_client.integrations.fastapi import FiefAuth
-import logging
 from dotenv import load_dotenv
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
 
 # Load environment variables
 FIEF_BASE_URL = os.getenv("FIEF_BASE_URL")
@@ -33,4 +31,5 @@ scheme = OAuth2AuthorizationCodeBearer(
 )
 
 auth = FiefAuth(fief, scheme)
-logger.info("Auth components initialized successfully")
+
+current_user = auth.current_user()

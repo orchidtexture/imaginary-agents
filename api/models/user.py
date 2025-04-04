@@ -6,22 +6,29 @@ class User(Document):
     """
     MongoDB document model for storing Users
     """
-    email: str = Field(..., description="The model identifier")
-    base_url: str = Field(..., description="Base URL for the LLM provider API")
-    provider: str = Field(
+    email: str = Field(..., description="The user email address")
+    llm_api_keys: list[dict] = Field(
         ...,
-        description="The provider name (e.g., 'openai', 'anthropic')"
+        description="List of API keys for different LLM providers"
     )
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "model": "deepseek-chat",
-                "base_url": "https://api.deepseek.com",
-                "provider": "deepseek"
+                "email": "example@mail.com",
+                "llm_api_keys": [
+                    {
+                        "provider": "openai",
+                        "api_key": "sk-xxxxxxxxxxxxxxxxxxxx"
+                    },
+                    {
+                        "provider": "anthropic",
+                        "api_key": "sk-xxxxxxxxxxxxxxxxxxxx"
+                    }
+                ]
             }
         }
     )
 
     class Settings:
-        name = "llm_configs"
+        name = "users"

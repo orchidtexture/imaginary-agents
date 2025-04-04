@@ -1,9 +1,10 @@
 from beanie import PydanticObjectId
 from typing import List, Union
 
-from api.models import LLMConfig, Agent
+from api.models import LLMConfig, Agent, User
 
 llm_config_collection = LLMConfig
+user_collection = User
 
 ############################################
 # LLM Configurations
@@ -59,3 +60,17 @@ async def update_llm_config_data(
 async def add_agent(new_agent: Agent) -> Agent:
     agent = await new_agent.create()
     return agent
+
+############################################
+# Users
+############################################
+
+
+async def add_user(new_user: User) -> User:
+    user = await new_user.create()
+    return user
+
+
+async def retrieve_user_by_email(email: str) -> User:
+    user = await User.find(User.email == email).first_or_none()
+    return user
