@@ -65,6 +65,13 @@ async def retrieve_agent(id: PydanticObjectId) -> Agent:
     agent = await Agent.get(id)
     return agent
 
+
+async def retrieve_agent_available_tools(id: PydanticObjectId) -> List[str]:
+    agent = await Agent.get(id)
+    if agent:
+        return agent.available_tools
+    return []
+
 ############################################
 # Users
 ############################################

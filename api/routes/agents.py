@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List
 import logging
 from api.models import Agent
-from imaginary_agents import tools
 
 from fief_client import FiefUserInfo
 from api.auth import current_user
@@ -21,35 +20,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
-registered_tools = [  # TODO: assign dinamically perhaps from db
-    {
-        "tool": tools.BrowserUseTool,
-        "input_schema": tools.BrowserUseToolInputSchema,
-        "output_schema": tools.BrowserUseToolOutputSchema,
-    },
-    {
-        "tool": tools.CrawlerTool,
-        "input_schema": tools.CrawlerToolInputSchema,
-        "output_schema": tools.CrawlerToolOutputSchema,
-    }
-]
-
 
 class AgentRunRequest(BaseModel):
     """Request model for running an Agent"""
     id: str = Field(..., description="Agent ID")
-    input_fields: Dict[str, Any] = Field(
-        default=None,
-        description="Input fields"
+    input_message: str = Field(
+        ...,
+        description="The user's input message to be analyzed and responded to."
     )
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "id": "67e31ddb8ff9fd95480077e9",
-                "input_fields": {
-                    "notes": "The notes from the technical meeting"
-                }
+                "input_message": "Go to duckduck.go and search for 'how to make a cake'"
             }
         }
     )
@@ -78,7 +62,7 @@ async def run_agent(
         try:
             response = await agent.run(
                 llm_api_key=llm_api_key,
-                input_fields=config.input_fields,
+                input_message=config.input_message,
             )
         except Exception as e:
             if isinstance(e, ValueError):
