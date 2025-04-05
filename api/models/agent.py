@@ -9,31 +9,14 @@ from config import settings
 
 from beanie import Document
 from pydantic import Field, ConfigDict, create_model
-from atomic_agents.agents.base_agent import (
-    BaseAgent,
-    BaseAgentConfig,
-    BaseAgentInputSchema
-)
+from atomic_agents.agents.base_agent import BaseAgent, BaseAgentInputSchema
 from atomic_agents.lib.base.base_io_schema import BaseIOSchema
-from atomic_agents.lib.components.system_prompt_generator import SystemPromptGenerator
 
-from imaginary_agents import tools
+from imaginary_agents.agents.orchestrator import OrchestratorAgent
+from imaginary_agents.agents.basic_agent import BasicAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-registered_tools = [  # TODO: assign dinamically perhaps from db
-    {
-        "tool": tools.BrowserUseTool,
-        "input_schema": tools.BrowserUseToolInputSchema,
-        "output_schema": tools.BrowserUseToolOutputSchema,
-    },
-    {
-        "tool": tools.CrawlerTool,
-        "input_schema": tools.CrawlerToolInputSchema,
-        "output_schema": tools.CrawlerToolOutputSchema,
-    }
-]
 
 
 class Agent(Document):
@@ -253,12 +236,12 @@ class Agent(Document):
     async def run(
         self,
         llm_api_key: str,
-        input_message: str
+        input_message: Optional[str] = None,
+        input_fields: Optional[Dict[str, Any]] = None
     ) -> BaseAgent:
         """Run an atomic-agent instance based on Agent"""
         if not self._agent:
-            # 1. Configure the client based on model
-            # Support models supported by atomic-agents
+            # 1. Configure the client based on the llm_model
             from database.database import retrieve_llm_config_by_model
 
             llm_config = await retrieve_llm_config_by_model(model=self.llm_model)
@@ -270,55 +253,93 @@ class Agent(Document):
                 ),
                 mode=instructor.Mode.MD_JSON
             )
-            # # 2. Dynamically create input/output schemas if defined
-            # if self.input_schema_fields:
-            #     try:
-            #         self.validate_input_fields(input_fields)
-            #     except ValueError as e:
-            #         raise ValueError(
-            #             f"Validation error: {str(e)}"
-            #         )
-            #     dynamic_input_schema = self.setup_dynamic_schema(
-            #         self.input_schema_fields
-            #     )
-            # else:
-            #     dynamic_input_schema = None
+            if self.type == "simple":
+                # Dynamically create output schemas
+                if self.input_schema_fields:
+                    try:
+                        self.validate_input_fields(input_fields)
+                    except ValueError as e:
+                        raise ValueError(
+                            f"Validation error: {str(e)}"
+                        )
+                    dynamic_input_schema = self.setup_dynamic_schema(
+                        self.input_schema_fields
+                    )
+                else:
+                    dynamic_input_schema = None
 
-            tools = self.tools_available
-            if not tools:
-                raise ValueError("No tools available for this agent")
+                dynamic_output_schema = self.setup_dynamic_schema(
+                    self.output_schema_fields
+                )
 
-            background, output_instructions, tools_desc = self.setup_orchestrator_config(
-                tools
-            )
+                self._agent = BasicAgent(
+                    client=client,
+                    llm_model=self.llm_model,
+                    background=self.background,
+                    output_instructions=self.output_instructions,
+                    steps=self.steps,
+                    input_schema=dynamic_input_schema,
+                    output_schema=dynamic_output_schema
+                )
+                input_schema = dynamic_input_schema(**input_fields)
+                agent_response = self._agent.run(input_schema)
 
-            output_schema = self.setup_output_schema(tools, tools_desc)
-            logger.info(f"Output schema: {output_schema}")
+                return agent_response.dict()
 
-            if self.background:
-                background.extend(self.background)
-            if self.output_instructions:
-                output_instructions.extend(self.output_instructions)
+            elif self.type == "orchestrator":
+                # 2. Setup Orchestrator Agent config with available tools
+                tools = self.tools_available
+                if not tools:
+                    raise ValueError("No tools available for this agent")
 
-            # 3. Create system prompt generator
-            system_prompt_generator = SystemPromptGenerator(
-                background=background,
-                steps=self.steps,
-                output_instructions=output_instructions
-            )
-            # 4. Create agent config
-            config = BaseAgentConfig(
-                client=client,
-                model=self.llm_model,
-                system_prompt_generator=system_prompt_generator,
-                output_schema=output_schema
-            )
-            # 5. Create the agent instance
-            self._agent = BaseAgent(config)
-            agent_response = self._agent.run(
-                BaseAgentInputSchema(chat_message=input_message)
-            )
-        return agent_response.dict()
+                (
+                    background,
+                    output_instructions,
+                    tools_desc
+                ) = self.setup_orchestrator_config(
+                    tools
+                )
+
+                # 3. Generate Orchestrator Agent Output Schema
+
+                output_schema = self.setup_output_schema(tools, tools_desc)
+
+                if self.background:
+                    background.extend(self.background)
+                if self.output_instructions:
+                    output_instructions.extend(self.output_instructions)
+
+                self._agent = OrchestratorAgent(
+                    client=client,
+                    llm_model=self.llm_model,
+                    background=background,
+                    output_instructions=output_instructions,
+                    steps=self.steps,
+                    output_schema=output_schema
+                )
+
+                # 5. Run Orchestrator Agent to select Tool to use
+                input_schema = BaseAgentInputSchema(chat_message=input_message)
+                agent_response = self._agent.run(input_schema)
+
+                # TODO: next steps involve running the selected tool
+                # and returning the final response
+                # selected_tool_info = agent_response.dict()
+                # selected_tool_name = selected_tool_info["tool"]
+                # selected_tool_input_fields = selected_tool_info["tool_parameters"]
+                # selected_tool_response = 
+
+                # # 6. Run the selected tool
+                # selected_tool_response = await self.runTool(selected_tool_input_fields)
+                # # 7. Return the final response
+                # self._agent.output_schema = None
+                # self._agent.memory.add_message("system", selected_tool_response)
+                # final_answer = self._agent.run(input_schema)
+
+                # return final_answer.dict()
+                return agent_response.dict()
+            else:
+                raise ValueError(f"Agent type '{self.type}' not supported")
 
     class Settings:
         name = "agents"

@@ -24,16 +24,23 @@ router = APIRouter(prefix="/agents", tags=["Agents"])
 class AgentRunRequest(BaseModel):
     """Request model for running an Agent"""
     id: str = Field(..., description="Agent ID")
-    input_message: str = Field(
-        ...,
+    input_message: Optional[str] = Field(
+        default=None,
         description="The user's input message to be analyzed and responded to."
+    )
+    input_fields: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Input fields for the agent"
     )
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "id": "67e31ddb8ff9fd95480077e9",
-                "input_message": "Go to duckduck.go and search for 'how to make a cake'"
+                "input_message": "Go to duckduck.go and search for 'how to make a cake'",
+                "input_fields": {
+                    "input_message": "Tell me all the possible evolutions of eevee"
+                }
             }
         }
     )
@@ -63,6 +70,7 @@ async def run_agent(
             response = await agent.run(
                 llm_api_key=llm_api_key,
                 input_message=config.input_message,
+                input_fields=config.input_fields,
             )
         except Exception as e:
             if isinstance(e, ValueError):
