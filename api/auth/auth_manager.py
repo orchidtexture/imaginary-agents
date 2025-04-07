@@ -1,35 +1,26 @@
-import os
-from fastapi.security import OAuth2AuthorizationCodeBearer
-from fief_client import FiefAsync
-from fief_client.integrations.fastapi import FiefAuth
-from dotenv import load_dotenv
+from fastapi import Depends, HTTPException, Header
+from typing import Optional
 
-load_dotenv()
+from api.models.user import User
+from database.database import retrieve_user_by_api_key
 
 
-# Load environment variables
-FIEF_BASE_URL = os.getenv("FIEF_BASE_URL")
-FIEF_CLIENT_ID = os.getenv("FIEF_CLIENT_ID")
-FIEF_CLIENT_SECRET = os.getenv("FIEF_CLIENT_SECRET")
+async def get_api_key_from_header(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key")
+) -> str:
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+    return x_api_key
 
-if not all([FIEF_BASE_URL, FIEF_CLIENT_ID, FIEF_CLIENT_SECRET]):
-    raise ("Fief environment variables not set. Auth will be disabled.")
 
-# Create Fief client
-fief = FiefAsync(
-    FIEF_BASE_URL,
-    FIEF_CLIENT_ID,
-    FIEF_CLIENT_SECRET,
-)
+async def current_user(api_key: str = Depends(get_api_key_from_header)) -> User:
+    user = await retrieve_user_by_api_key(api_key)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired API key")
+    return user
 
-# Create OAuth2 scheme
-scheme = OAuth2AuthorizationCodeBearer(
-    f"{FIEF_BASE_URL}/authorize",
-    f"{FIEF_BASE_URL}/api/token",
-    scopes={"openid": "openid", "offline_access": "offline_access"},
-    auto_error=False,
-)
 
-auth = FiefAuth(fief, scheme)
-
-current_user = auth.current_user()
+async def admin_user(user: User = Depends(current_user)) -> User:
+    if not getattr(user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return user

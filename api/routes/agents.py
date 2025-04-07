@@ -2,9 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Dict, List
 import logging
-from api.models import Agent
+from api.models import Agent, User
 
-from fief_client import FiefUserInfo
 from api.auth import current_user
 
 from database.database import (
@@ -49,7 +48,7 @@ class AgentRunRequest(BaseModel):
 @router.post("/run")
 async def run_agent(
     config: AgentRunRequest,
-    fiefUser: FiefUserInfo = Depends(current_user)
+    user: User = Depends(current_user)
 ):
     try:
         # Retrieve Agent from DB
@@ -58,7 +57,8 @@ async def run_agent(
         # fetch llm_config from db by model name
         llm_config = await retrieve_llm_config_by_model(model=agent.llm_model)
         # fetch user from db by email
-        user = await retrieve_user_by_email(fiefUser['email'])
+        logger.info(f"User: {user}")
+        user = await retrieve_user_by_email(user.email)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"

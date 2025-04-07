@@ -1,7 +1,7 @@
 from beanie import PydanticObjectId
 from typing import List, Union
 
-from api.models import LLMConfig, Agent, User
+from api.models import LLMConfig, Agent, User, APIKey
 
 llm_config_collection = LLMConfig
 
@@ -85,3 +85,21 @@ async def add_user(new_user: User) -> User:
 async def retrieve_user_by_email(email: str) -> User:
     user = await User.find(User.email == email).first_or_none()
     return user
+
+
+async def retrieve_user_by_api_key(api_key: str) -> User:
+    user = await User.find(
+        User.api_keys.key == api_key,
+        fetch_links=True
+    ).first_or_none()
+    return user
+
+
+############################################
+# API keys
+############################################
+
+
+async def add_api_key(new_api_key: APIKey) -> APIKey:
+    api_key = await new_api_key.create()
+    return api_key

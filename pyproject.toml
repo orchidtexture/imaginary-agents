@@ -29,7 +29,6 @@ dependencies = [
     "pytest-asyncio (>=0.25.3,<0.26.0)",
     "asgi-lifespan (>=2.1.0,<3.0.0)",
     "mongomock-motor (>=0.0.35,<0.0.36)",
-    "fief-client[fastapi] (>=0.20.0,<0.21.0)",
 ]
 
 

@@ -1,6 +1,6 @@
-from .auth_manager import auth, current_user
+from .auth_manager import current_user, admin_user
 
 __all__ = [
-    auth,
-    current_user
+    current_user,
+    admin_user
 ]
