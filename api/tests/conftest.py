@@ -12,16 +12,28 @@ from config.db import _client, _db
 
 # Mock user to override auth
 mock_user = {
-    "sub": "test-sub-id",
     "email": "test@example.com",
-    "tenant_id": "mock-tenant-id",
-    "fields": {"first_name": "Test", "last_name": "User"}
+    "llm_api_keys": {
+        "test_llm_provider": "sk-xxxxxxxxxxxxxxxxxxxx",
+    },
+    "is_admin": True,
+    "agents": [],
+    "api_keys": [],
 }
 
 
 @pytest.fixture()
 def override_dependencies():
-    app.dependency_overrides[current_user] = lambda: mock_user
+    user = User(
+        email=mock_user["email"],
+        llm_api_keys={
+            "test_llm_provider": "sk-xxxxxxxxxxxxxxxxxxxx",
+        },
+        is_admin=mock_user["is_admin"],  # TODO: create non-admin user as well
+        agents=[],
+        api_keys=[]
+    )
+    app.dependency_overrides[current_user] = lambda: user
     yield
     app.dependency_overrides = {}
 
@@ -142,7 +154,10 @@ async def sample_user(scope="function"):
         email=mock_user["email"],
         llm_api_keys={
             "test_llm_provider": "sk-xxxxxxxxxxxxxxxxxxxx",
-        }
+        },
+        is_admin=mock_user["is_admin"],
+        agents=[],
+        api_keys=[]
     )
 
     created_user = await sample_user.create()

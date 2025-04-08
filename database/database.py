@@ -95,6 +95,28 @@ async def retrieve_user_by_api_key(api_key: str) -> User:
     return user
 
 
+async def update_user_data(
+    id: PydanticObjectId,
+    data: dict
+) -> Union[bool, User]:
+    print(f"Updating user data: {data}")
+    des_body = {k: v for k, v in data.items() if v is not None}
+    update_query = {"$set": {field: value for field, value in des_body.items()}}
+    user = await User.get(id)
+    if user:
+        await user.update(update_query)
+        return user
+    return False
+
+
+async def delete_user(id: PydanticObjectId) -> bool:
+    user = await User.get(id)
+    if user:
+        await user.delete()
+        return True
+    return False
+
+
 ############################################
 # API keys
 ############################################

@@ -10,7 +10,8 @@ from database.database import (
     add_agent,
     retrieve_user_by_email,
     retrieve_agent,
-    retrieve_llm_config_by_model
+    retrieve_llm_config_by_model,
+    update_user_data
 )
 
 # Configure logging
@@ -160,7 +161,7 @@ class CreateAgentRequest(BaseModel):
 
 
 @router.post("/create")
-async def create_agent(config: CreateAgentRequest):
+async def create_agent(config: CreateAgentRequest, user: User = Depends(current_user)):
     """
     Create a new Agent
     :return: The newly created Agent
@@ -170,6 +171,12 @@ async def create_agent(config: CreateAgentRequest):
         # Model dump bc request model has same fields as Agent model
         new_agent = Agent(**config.model_dump())
         res = await add_agent(new_agent)
+
+        # Add agent to user
+        current_user_agents = user.agents
+        new_agents = current_user_agents + [new_agent]
+        await update_user_data(id=user.id, data={"agents": new_agents})
+
         return res
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")

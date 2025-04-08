@@ -3,6 +3,7 @@ from pydantic import Field, ConfigDict
 from typing import Dict, List
 
 from .api_key import APIKey
+from .agent import Agent
 
 
 class User(Document):
@@ -18,6 +19,10 @@ class User(Document):
         default=[],
         description="List of API keys associated with the user"
     )
+    agents: List[Link["Agent"]] = Field(
+        default=[],
+        description="List of agents associated with the user"
+    )
     is_admin: bool = Field(
         default=False,
         description="Flag indicating if the user is an admin"
@@ -32,6 +37,7 @@ class User(Document):
                     "anthropic": "sk-xxxxxxxxxxxxxxxxxxxx"
                 },
                 "api_keys": ["some_api_key_id"],
+                "agents": ["some_agent_id"],
                 "is_admin": False
             }
         }
