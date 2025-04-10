@@ -98,6 +98,14 @@ class CreateAgentRequest(BaseModel):
 
     name: str = Field(..., description="Name of the agent")
     llm_model: str = Field(..., description="The identifier of the model to use")
+    type: str = Field(
+        default="simple",
+        description="Type of agent (e.g., orchestrator, simple)"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Description of the agent"
+    )
     background: Optional[List[str]] = Field(
         default=None,
         description="Background context for the agent"
@@ -128,6 +136,8 @@ class CreateAgentRequest(BaseModel):
             "example": {
                 "name": "Mini Daniel",
                 "llm_model": "deepseek-chat",
+                "type": "simple",
+                "description": "A simple agent for summarizing technical meetings",
                 "background": [
                     "You are an experienced technical project manager",
                     "You excel at organizing complex product requirements and tasks",
